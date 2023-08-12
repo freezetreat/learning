@@ -10,6 +10,10 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import Normalize
 from torch.optim.lr_scheduler import LambdaLR
 
+import logging
+logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
+
+
 plt.style.use('fivethirtyeight')
 
 def make_lr_fn(start_lr, end_lr, num_iter, step_mode='exp'):
@@ -194,6 +198,9 @@ class StepByStep(object):
                 self.val_losses.append(val_loss)
 
             self._epoch_schedulers(val_loss)
+
+            if epoch % 10 == 0:
+                logging.info(f'Training at epoch={epoch}. Training loss={loss:,.4f}. Validation loss={val_loss:,.4f}')
 
             # If a SummaryWriter has been set...
             if self.writer:

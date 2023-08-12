@@ -8,9 +8,9 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset, random_split, TensorDataset
 from torch.nn.utils import rnn as rnn_utils
 
-#from data_generation.square_sequences import generate_sequences
-from stepbystep.v4 import StepByStep
+from StepByStep_v4 import StepByStep
 
+##
 
 import numpy as np
 
@@ -53,6 +53,8 @@ test_loader = DataLoader(test_data, batch_size=16)
 
 class SquareModel(nn.Module):
     def __init__(self, n_features, hidden_dim, n_outputs):
+        super(SquareModel, self).__init__()
+
         self.hidden_dim = hidden_dim
         self.n_features = n_features
         self.n_outputs = n_outputs
