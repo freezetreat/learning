@@ -2,8 +2,10 @@
 # Road Map
 # - use GPU
 
-
-
+# Questions
+# - why does optim.SGD requires model.parameters?
+# - when evaluating validation data, why do we have to specify no_grad?
+# - what is optimizer.zero_grad for?
 
 
 ##
