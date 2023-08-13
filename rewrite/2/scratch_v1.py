@@ -97,17 +97,17 @@ for i in range(epoch):
     # 5 calculate losses
     training_loss = 1 / N * (losses**2).sum()
 
-    # validation_losses = []
-    # for idx in range(len(x1_val)):
-    #     x1, x2 = x1_val[idx], x2_val[idx]
-    #     yhat = bias + w1 * x1 + w2 * x2
-    #     loss = yhat - y_train[idx]
-    #     validation_losses.append(loss)
-    # validation_loss = 1 / n * sum([loss**2 for loss in validation_losses])
-    validation_loss = 0
+    validation_losses = []
+    # Reshape W_param and bias_param accordingly
+    W_param_val = np.full((N_orig - N, 2), W_param[0])
+    bias_param_val = np.full((N_orig - N, 1), bias_param[0])
+
+    Y_hat_val = bias_param_val + np.sum(W_param_val * X_val, axis=1, keepdims=True)
+    val_losses = Y_hat_val - Y_val
+    val_loss = 1 / N * (val_losses**2).sum()
 
     logging.info(f'Epoch:{i} bias:{bias_param[0][0]:,.3f} w0:{W_param[0][0]:,.3f} w1:{W_param[0][1]:,.3f} '
-                 f'bias_grad:{bias_grad:,.3f} w0_grad:{w0_grad:,.3f} w1_grad:{w1_grad:,.3f} ')
-                #  f'training:{training_loss:,.3f} validation:{validation_loss:,.3f}')
+                 f'bias_grad:{bias_grad:,.3f} w0_grad:{w0_grad:,.3f} w1_grad:{w1_grad:,.3f} '
+                 f'training:{training_loss:,.3f} validation:{val_loss:,.3f}')
 
 
