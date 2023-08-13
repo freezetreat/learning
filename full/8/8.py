@@ -14,22 +14,32 @@ from StepByStep_v4 import StepByStep
 
 import numpy as np
 
-def generate_sequences(n=128, variable_len=False, seed=13):
-    basic_corners = np.array([[-1, -1], [-1, 1], [1, 1], [1, -1]])
-    np.random.seed(seed)
-    bases = np.random.randint(4, size=n)
-    if variable_len:
-        lengths = np.random.randint(3, size=n) + 2
-    else:
-        lengths = [4] * n
-    directions = np.random.randint(2, size=n)
-    points = [basic_corners[[(b + i) % 4 for i in range(4)]][slice(None, None, d*2-1)][:l] + np.random.randn(l, 2) * 0.1 for b, d, l in zip(bases, directions, lengths)]
-    return points, directions
+# def generate_sequences(n=128, variable_len=False, seed=13):
+#     basic_corners = np.array([[-1, -1], [-1, 1], [1, 1], [1, -1]])
+#     np.random.seed(seed)
+#     bases = np.random.randint(4, size=n)
+#     if variable_len:
+#         lengths = np.random.randint(3, size=n) + 2
+#     else:
+#         lengths = [4] * n
+#     directions = np.random.randint(2, size=n)
+#     points = [basic_corners[[(b + i) % 4 for i in range(4)]][slice(None, None, d*2-1)][:l] + np.random.randn(l, 2) * 0.1 for b, d, l in zip(bases, directions, lengths)]
+#     return points, directions
 
-##
+# ##
 
-points, directions = generate_sequences(n=128, seed=13)
-test_points, test_directions = generate_sequences(seed=19)
+# points, directions = generate_sequences(n=128, seed=13)
+# test_points, test_directions = generate_sequences(seed=19)
+
+#with open('random_data.pickle', 'wb') as outf:
+#    pickle.dump(dict(points=points, directions=directions, test_points=test_points, test_directions=test_directions), outf)
+
+import pickle
+with open('random_data.pickle', 'rb') as inf:
+    d = pickle.load(inf)
+
+points, directions = d['points'], d['directions']
+test_points, test_directions = d['test_points'], d['test_directions']
 
 ##
 
@@ -87,6 +97,6 @@ optimizer = optim.Adam(model.parameters(), lr=0.01)     # why ?
 
 sbs_rnn = StepByStep(model, loss, optimizer)
 sbs_rnn.set_loaders(train_loader, test_loader)
-sbs_rnn.train(100)
+sbs_rnn.train(10)
 
 fig = sbs_rnn.plot_losses()

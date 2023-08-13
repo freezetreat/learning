@@ -199,8 +199,9 @@ class StepByStep(object):
 
             self._epoch_schedulers(val_loss)
 
-            if epoch % 10 == 0:
-                logging.info(f'Training at epoch={epoch}. Training loss={loss:,.4f}. Validation loss={val_loss:,.4f}')
+            logging.info(f'epoch={epoch}. '
+                         f'training={loss:,.4f}. validation={val_loss:,.4f} '
+                         f'parameters={self.model.state_dict()} ')
 
             # If a SummaryWriter has been set...
             if self.writer:
