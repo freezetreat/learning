@@ -40,7 +40,7 @@ x_val, y_val = x_val.flatten(), y_val.flatten()
 
 
 import logging
-logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.DEBUG)
+logging.basicConfig(format='%(message)s', level=logging.DEBUG)
 
 
 
@@ -56,7 +56,7 @@ bias = 0
 # Loss must be MSE because we are implementing their formula
 
 n = len(x_train)
-epoch = 1000
+epoch = 100
 
 for i in range(epoch):
     losses = []
@@ -81,6 +81,14 @@ for i in range(epoch):
     # 5 calculate losses
     training_loss = 1 / n * sum([loss**2 for loss in losses])
 
-    logging.info(f'Epoch:{i} weight:{weight:,.3f} bias:{bias:,.3f} training_loss:{training_loss:,.3f}')
+    validation_losses = []
+    for idx, x in enumerate(x_val):
+        yhat = bias + weight * x
+        loss = yhat - y_train[idx]
+        validation_losses.append(loss)
+    validation_loss = 1 / n * sum([loss**2 for loss in validation_losses])
+
+    logging.info(f'Epoch:{i} weight:{weight:,.3f} bias:{bias:,.3f} '
+                 f'training_loss:{training_loss:,.3f} validation_loss:{validation_loss:,.3f}')
 
 
