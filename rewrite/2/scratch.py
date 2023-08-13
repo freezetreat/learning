@@ -16,17 +16,24 @@
 import numpy as np
 
 true_b = 1
-true_w1 = 2
-true_w2 = -0.5
+true_w0 = 2
+true_w1 = -0.5
 N = 100
 
 # Data Generation
 np.random.seed(42)
-x1 = np.random.rand(N, 1)
-x2 = np.random.rand(N, 1)
+
+# Same code as scratch_v1
+X = np.random.rand(N, 2)            # N x 2
+x1 = X[:, 0]
+x2 = X[:, 1]
+
 y = true_b + \
-    true_w1 * x1 + (.1 * np.random.randn(N, 1)) + \
-    true_w2 * x2 + (.1 * np.random.randn(N, 1))
+    true_w0 * x1 + \
+    true_w1 * x2
+# y = true_b + \
+#     true_w0 * x1 + (.1 * np.random.randn(N, 1)) + \
+#     true_w1 * x2 + (.1 * np.random.randn(N, 1))
 
 
 ## generate our training and validation sets
@@ -61,8 +68,8 @@ logging.basicConfig(format='%(message)s', level=logging.DEBUG)
 ## y = bias + weight * x
 
 # TODO initialize with pytorch(42) value
+w0 = 0
 w1 = 0
-w2 = 0
 bias = 0
 
 
@@ -77,7 +84,7 @@ for i in range(epoch):
     for idx in range(len(x1_train)):
         x1, x2 = x1_train[idx], x2_train[idx]
         # 1. compute yhat
-        yhat = bias + w1 * x1 + w2 * x2
+        yhat = bias + w0 * x1 + w1 * x2
         # 2. compute loss
         loss = yhat - y_train[idx]
         losses.append(loss)
@@ -86,14 +93,14 @@ for i in range(epoch):
     # d_MSE / d_b
     bias_grad = 2.0 * 1 / n * sum(losses)
     # d_MSE / d_w
-    w1_grad = 2.0 * 1 / n * sum([x * losses[i] for (i, x) in enumerate(x1_train)])
-    w2_grad = 2.0 * 1 / n * sum([x * losses[i] for (i, x) in enumerate(x2_train)])
+    w0_grad = 2.0 * 1 / n * sum([x * losses[i] for (i, x) in enumerate(x1_train)])
+    w1_grad = 2.0 * 1 / n * sum([x * losses[i] for (i, x) in enumerate(x2_train)])
 
     # 4. update parameters
     lr = 0.1
     bias -= lr * bias_grad
+    w0 -= lr * w0_grad
     w1 -= lr * w1_grad
-    w2 -= lr * w2_grad
 
     # 5 calculate losses
     training_loss = 1 / n * sum([loss**2 for loss in losses])
@@ -101,12 +108,12 @@ for i in range(epoch):
     validation_losses = []
     for idx in range(len(x1_val)):
         x1, x2 = x1_val[idx], x2_val[idx]
-        yhat = bias + w1 * x1 + w2 * x2
+        yhat = bias + w0 * x1 + w1 * x2
         loss = yhat - y_train[idx]
         validation_losses.append(loss)
     validation_loss = 1 / n * sum([loss**2 for loss in validation_losses])
 
-    logging.info(f'Epoch:{i} bias:{bias:,.3f} w1:{w1:,.3f} w2:{w2:,.3f} '
-                 f'training_loss:{training_loss:,.3f} validation_loss:{validation_loss:,.3f}')
-
+    logging.info(f'Epoch:{i} bias:{bias:,.3f} w0:{w0:,.3f} w1:{w1:,.3f} '
+                 f'bias_grad:{bias_grad:,.3f} w0_grad:{w0_grad:,.3f} w1_grad:{w1_grad:,.3f} ')
+                #  f'training_loss:{training_loss:,.3f} validation_loss:{validation_loss:,.3f}')
 
