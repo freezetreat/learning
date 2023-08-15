@@ -16,9 +16,11 @@
 2023-08-13 13:38:33,012 - epoch=5. training=0.6881. validation=0.7026 parameters=OrderedDict([('basic_rnn.weight_ih_l0', tensor([[ 0.2229, -0.1433],
         [-0.7826, -0.4528]])), ('basic_rnn.weight_hh_l0', tensor([[ 0.2914, -0.3573],
         [-0.1701,  0.3014]])), ('basic_rnn.bias_ih_l0', tensor([ 0.4973, -0.0734])), ('basic_rnn.bias_hh_l0', tensor([ 0.8957, -0.7237])), ('classifier.weight', tensor([[-0.3880,  0.3420]])), ('classifier.bias', tensor([0.4317]))])
-2023-08-13 13:38:33,023 - epoch=6. training=0.6874. validation=0.6986 parameters=OrderedDict([('basic_rnn.weight_ih_l0', tensor([[ 0.2653, -0.1845],
-        [-0.8252, -0.4509]])), ('basic_rnn.weight_hh_l0', tensor([[ 0.2658, -0.3962],
-        [-0.1444,  0.2996]])), ('basic_rnn.bias_ih_l0', tensor([ 0.4728, -0.0513])), ('basic_rnn.bias_hh_l0', tensor([ 0.8713, -0.7016])), ('classifier.weight', tensor([[-0.3873,  0.3430]])), ('classifier.bias', tensor([0.4342]))])
+2023-08-13 13:38:33,023 - epoch=6. training=0.6874. validation=0.6986 parameters=OrderedDict([
+        ('basic_rnn.weight_ih_l0', tensor([[ 0.2653, -0.1845], [-0.8252, -0.4509]])),
+        ('basic_rnn.weight_hh_l0', tensor([[ 0.2658, -0.3962], [-0.1444,  0.2996]])),
+        ('basic_rnn.bias_ih_l0', tensor([ 0.4728, -0.0513])),
+        ('basic_rnn.bias_hh_l0', tensor([ 0.8713, -0.7016])), ('classifier.weight', tensor([[-0.3873,  0.3430]])), ('classifier.bias', tensor([0.4342]))])
 2023-08-13 13:38:33,034 - epoch=7. training=0.6853. validation=0.6946 parameters=OrderedDict([('basic_rnn.weight_ih_l0', tensor([[ 0.3053, -0.2416],
         [-0.8530, -0.4467]])), ('basic_rnn.weight_hh_l0', tensor([[ 0.2304, -0.4577],
         [-0.1268,  0.3117]])), ('basic_rnn.bias_ih_l0', tensor([ 0.4378, -0.0383])), ('basic_rnn.bias_hh_l0', tensor([ 0.8362, -0.6886])), ('classifier.weight', tensor([[-0.3874,  0.3327]])), ('classifier.bias', tensor([0.4374]))])

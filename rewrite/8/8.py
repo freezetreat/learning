@@ -6,8 +6,10 @@
 #
 
 
+import torch.nn as nn
+import torch
+from torchviz import make_dot
 
-import math
 import logging
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.DEBUG)
 
@@ -19,48 +21,72 @@ points, directions = d['points'], d['directions']
 test_points, test_directions = d['test_points'], d['test_directions']
 
 
-# SquareModel(n_features=2, hidden_dim=2, n_outputs=1)
-
-# coefficients
-input_w0, input_w1 = 0, 0
-hidden_w0, hidden_w1 = 0, 0
-
-input_w0, input_w1 = 0.1, -0.2
-input_b0, input_b1 = 0.1, 0.2
-hidden_w0, hidden_w1 = 0.3, 0.4
-hidden_b0, hidden_b1 = 0.3, 0.4
+input_w = torch.tensor([0.1, -0.2], requires_grad=True)
+input_b = torch.tensor([0.1, 0.2], requires_grad=True)
+hidden_w = torch.tensor([0.3, 0.4], requires_grad=True)
+hidden_b = torch.tensor([0.3, 0.4], requires_grad=True)
 
 
-def forward_one_sequence(sequence, name=""):
-    global hidden_w0, hidden_w1, hidden_b0, hidden_b1, \
-        input_w0, input_w1, input_b0, input_b1
+EPOCH = 1
+lr = 0.01
+loss_fn = nn.BCEWithLogitsLoss()
 
-    output = []
+classifier = nn.Linear(2, 1)
 
-    hidden_x0, hidden_x1 = 0, 0
+for epoch in range(EPOCH):
+    pass
+
+
+# def forward_one_sequence(hidden, sequence, name=""):
+    # global input_w, input_b, hidden_w, hidden_b
+
+# Initial hidden state is 0,0
+hidden = torch.tensor([0.0, 0.0], requires_grad=True)
+
+for x_idx, sequence in enumerate(d['points']):
+
+    hidden_states = []
+
     for x0, x1 in sequence:
-        temp_0 = x0 * input_w0 + input_b0 + hidden_x0 * hidden_w0 + hidden_b0
-        temp_1 = x1 * input_w1 + input_b1 + hidden_x1 * hidden_w1 + hidden_b1
-        temp_0 = math.tanh(temp_0)
-        temp_1 = math.tanh(temp_1)
+        x = torch.tensor([x0, x1], requires_grad=False)
+        hidden = torch.tanh(x * input_w + input_b + hidden * hidden_w + hidden_b)
 
-        # update hidden state
-        hidden_x0, hidden_x1 = temp_0, temp_1
+        logging.debug(f'sequence:{x_idx} hidden_x:{hidden}')
 
-        logging.debug(f'sequence:{name} '
-                      f'hidden_x:{hidden_x0:,.3f}, {hidden_x1:,.3f}')
+        hidden_states.append(hidden)
 
-        # Output the hidden state
-        output.append((hidden_x0, hidden_x1))
+    # logging.debug(f'[input], w0:{input_w0:,.3f}, w1:{input_w1:,.3f}, b0:{input_b0:,.3f}, b1:{input_b1:,.3f}, '
+                #   f'[hidden], w0:{hidden_w0:,.3f}, w1:{hidden_w1:,.3f}, b0:{hidden_b0:,.3f}, b1:{hidden_b1:,.3f}')
 
-    logging.debug(f'[input], w0:{input_w0:,.3f}, w1:{input_w1:,.3f}, b0:{input_b0:,.3f}, b1:{input_b1:,.3f}, '
-                  f'[hidden], w0:{hidden_w0:,.3f}, w1:{hidden_w1:,.3f}, b0:{hidden_b0:,.3f}, b1:{hidden_b1:,.3f}')
+    # Last one is used for classifier
+    yhat = classifier(hidden_states[-1])
 
-    return output
+    print('yhat', yhat)
+    print("d['directions'][x_idx]", d['directions'][x_idx])
+
+    loss = loss_fn(yhat, d['directions'][x_idx])
+
+    # Compute gradient
+    loss.backward()
+
+    print('before', input_w)
+
+    with torch.no_grad():
+        input_w -= lr * input_w.grad
+
+    print('after', input_w)
+
+    break
 
 
 
-print(forward_one_sequence(d['points'][0], "test"))
+
+# hiddens = forward_one_sequence(hidden_0, d['points'][0], "test")
+
+# make_dot(hiddens[0]).render("0", format="png")
+# make_dot(hiddens[1]).render("1", format="png")
+# make_dot(hiddens[2]).render("2", format="png")
+# make_dot(hiddens[3]).render("3", format="png")
 
 
 # Assuming 1 unroll for x0

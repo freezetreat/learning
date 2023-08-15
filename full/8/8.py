@@ -35,7 +35,7 @@ import numpy as np
 #    pickle.dump(dict(points=points, directions=directions, test_points=test_points, test_directions=test_directions), outf)
 
 import pickle
-with open('random_data.pickle', 'rb') as inf:
+with open('random_data.pickle', 'r') as inf:
     d = pickle.load(inf)
 
 points, directions = d['points'], d['directions']
