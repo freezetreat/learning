@@ -1,4 +1,4 @@
-# Everything using raw numbers, no matrices whatsoevers
+# Everything using raw numbers and variables, no matrices whatsoevers
 
 # Road Map
 # - use GPU

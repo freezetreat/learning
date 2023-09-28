@@ -1,4 +1,4 @@
-# Now we use matrices
+# Using numpy to make coding more legible
 
 # Road Map
 # - use GPU

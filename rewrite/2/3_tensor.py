@@ -1,4 +1,4 @@
-# Now we use tensors
+# Now we use tensors in pytorch, eliminate the need to calculate partial derivative
 
 # Road Map
 # - use GPU
