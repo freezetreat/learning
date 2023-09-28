@@ -1,4 +1,4 @@
-# Now we use tensors in pytorch, eliminate the need to calculate partial derivative
+# Using optimizer
 
 # Road Map
 # - use GPU
@@ -15,6 +15,7 @@
 ##
 
 import torch
+import torch.optim as optim
 from torchviz import make_dot
 import numpy as np
 
@@ -73,6 +74,9 @@ bias_param = torch.tensor([0], dtype=torch.float64, requires_grad=True)
 # NOTE:
 # Loss must be MSE because we are implementing their formula
 
+optimizer = optim.SGD([w_param, bias_param],
+                      lr=0.1)
+
 epoch = 20
 # epoch = 5
 
@@ -94,18 +98,8 @@ for i in range(epoch):
     # attribute of the tensors (w_param.grad and bias_param.grad).
 
     # Note, normally we replace with this:
-    # optimizer.step()
-    # optimizer.zero_grad()
-    # but the point of this exercise is that we want to implement just backward()
-
-    lr = 0.1
-    with torch.no_grad():   # GPT: Temporarily set all the requires_grad flags to false
-        w_param.data -= w_param.grad * lr
-        bias_param.data -= bias_param.grad * lr
-
-        # Zero out the gradients after the update for the next iteration
-        w_param.grad.zero_()
-        bias_param.grad.zero_()
+    optimizer.step()
+    optimizer.zero_grad()
 
     # 5 calculate losses
     with torch.no_grad():
