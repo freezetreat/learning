@@ -73,52 +73,49 @@ bias_param = torch.tensor([0], dtype=torch.float64, requires_grad=True)
 # NOTE:
 # Loss must be MSE because we are implementing their formula
 
-epoch = 1000
+epoch = 500
+# epoch = 5
 
 for i in range(epoch):
     # Compute loss
     Y_hat = torch.matmul(X_train, w_param.unsqueeze(1)) + bias_param
 
-    make_dot(losses).render("losses", format="png")
     losses = Y_hat - Y_train
 
-    # TODO: RESUME HERE
+    # losses is an array. Need it to be a scalar to call backward.
+    # note that for some reason, this differs from scratch.py because
+    # there we use the sum of losses in our gradients.
+    training_loss = (losses ** 2).mean()
 
-    # # Compute Gradient
-    losses.backward()
-    make_dot(losses).render("losses", format="png")
+    # now you can call backward since total_loss is a scalar
+    training_loss.backward()
 
-    # # 3. compute gradient descent
-    # # d_MSE / d_b
-    # bias_grad = 2.0 * 1 / N * losses.sum()
-    # # d_MSE / d_w
-    # # first column of X which is x_1
-    # w0_grad = 2.0 * 1 / N * (X_train[:, 0] * losses.flatten()).sum()
-    # w1_grad = 2.0 * 1 / N * (X_train[:, 1] * losses.flatten()).sum()
+    # GPT: After losses.backward() is executed, the gradients are stored in the .grad
+    # attribute of the tensors (w_param.grad and bias_param.grad).
 
-    # # 4. update parameters
-    # lr = 0.1
-    # bias_param -= lr * bias_grad
-    # # print('before', W_param)
-    # W_param[:, 0] -= lr * w0_grad
-    # W_param[:, 1] -= lr * w1_grad
-    # # print('after', W_param)
+    # Note, normally we replace with this:
+    # optimizer.step()
+    # optimizer.zero_grad()
+    # but the point of this exercise is that we want to implement just backward()
 
-    # # 5 calculate losses
-    # training_loss = 1 / N * (losses**2).sum()
+    lr = 0.1
+    with torch.no_grad():   # GPT: Temporarily set all the requires_grad flags to false
+        w_param.data -= w_param.grad * lr
+        bias_param.data -= bias_param.grad * lr
 
-    # # validation_losses = []
-    # # # Reshape W_param and bias_param accordingly
-    # # W_param_val = np.full((N_orig - N, 2), W_param[0])
-    # # bias_param_val = np.full((N_orig - N, 1), bias_param[0])
+        # Zero out the gradients after the update for the next iteration
+        w_param.grad.zero_()
+        bias_param.grad.zero_()
 
-    # # Y_hat_val = bias_param_val + np.sum(W_param_val * X_val, axis=1, keepdims=True)
-    # # val_losses = Y_hat_val - Y_val
-    # # val_loss = 1 / N * (val_losses**2).sum()
+    # 5 calculate losses
+    with torch.no_grad():
+        Y_hat = torch.matmul(X_val, w_param.unsqueeze(1)) + bias_param
+        temp_losses = Y_hat - Y_val
+        validation_loss = (temp_losses ** 2).mean()
 
-    # logging.info(f'Epoch:{i} bias:{bias_param[0][0]:,.3f} w0:{W_param[0][0]:,.3f} w1:{W_param[0][1]:,.3f} '
-    #              f'bias_grad:{bias_grad:,.3f} w0_grad:{w0_grad:,.3f} w1_grad:{w1_grad:,.3f} '
-    #              f'training:{training_loss:,.3f} ')
-    #             #  f'training:{training_loss:,.3f} validation:{val_loss:,.3f}')
+    logging.info(f'Epoch:{i} bias:{bias_param.item():,.3f} w0:{w_param[0].item():,.3f} w1:{w_param[1].item():,.3f} '
+                #  f'bias_grad:{bias_grad:,.3f} w0_grad:{w0_grad:,.3f} w1_grad:{w1_grad:,.3f} '
+                #  f'training:{training_loss:,.3f} ')
+                 f'training:{training_loss:,.3f} validation:{validation_loss:,.3f}')
 
 
