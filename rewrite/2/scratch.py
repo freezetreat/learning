@@ -1,3 +1,4 @@
+# Everything using raw numbers, no matrices whatsoevers
 
 # Road Map
 # - use GPU
@@ -77,7 +78,7 @@ bias = 0
 # Loss must be MSE because we are implementing their formula
 
 n = len(x1_train)
-epoch = 1000
+epoch = 10
 
 for i in range(epoch):
     losses = []
@@ -114,6 +115,6 @@ for i in range(epoch):
     validation_loss = 1 / n * sum([loss**2 for loss in validation_losses])
 
     logging.info(f'Epoch:{i} bias:{bias:,.3f} w0:{w0:,.3f} w1:{w1:,.3f} '
-                 f'bias_grad:{bias_grad:,.3f} w0_grad:{w0_grad:,.3f} w1_grad:{w1_grad:,.3f} ')
-                #  f'training_loss:{training_loss:,.3f} validation_loss:{validation_loss:,.3f}')
+                 f'bias_grad:{bias_grad:,.3f} w0_grad:{w0_grad:,.3f} w1_grad:{w1_grad:,.3f} '
+                 f'training_loss:{training_loss:,.3f} validation_loss:{validation_loss:,.3f}')
 
