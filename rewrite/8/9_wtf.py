@@ -27,7 +27,7 @@ hidden_w = torch.tensor([0.3, 0.4], requires_grad=True)
 hidden_b = torch.tensor([0.3, 0.4], requires_grad=True)
 
 
-EPOCH = 1
+EPOCH = 10
 lr = 0.01
 loss_fn = nn.BCEWithLogitsLoss()
 
@@ -75,10 +75,6 @@ for x_idx, sequence in enumerate(d['points']):
         input_w -= lr * input_w.grad
 
     print('after', input_w)
-
-    break
-
-
 
 
 # hiddens = forward_one_sequence(hidden_0, d['points'][0], "test")
