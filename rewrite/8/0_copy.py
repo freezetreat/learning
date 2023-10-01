@@ -21,6 +21,8 @@ test_points, test_directions = d['test_points'], d['test_directions']
 
 
 torch.manual_seed(19)
+torch.set_default_dtype(torch.float64)
+
 
 hidden_state = torch.zeros(2)
 
@@ -29,11 +31,17 @@ hidden_dim = 2
 
 rnn_cell = nn.RNNCell(input_size=n_features, hidden_size=hidden_dim)
 rnn_state = rnn_cell.state_dict()
+print(rnn_state)
 
+## Don't touch the classifier, our focus is on RNN rather than classifier
 classifier = nn.Linear(hidden_dim, 1)
+classifier.weight.data = torch.tensor([[-0.2732, -0.1587]], dtype=torch.float64)
+classifier.bias.data = torch.tensor([0.5806], dtype=torch.float64)
+print('classifier:', classifier.state_dict())
+# ALWAYS CHECK DEFAULT WEIGHTS. THEY MIGHT CHANGE AFTER YOU CHANGE DATA TYPES
 
 EPOCH = 100
-# points, directions = points[:2], directions[:2]
+# points, directions = points[:1], directions[:1]
 
 
 # loss = nn.BCELoss()           # expects number from 0 to 1
@@ -46,7 +54,7 @@ loss = nn.BCEWithLogitsLoss()   # just sigmod with BCELoss
 # Answer: ChatGPT to the rescue!!!!
 optimizer = optim.Adam(list(rnn_cell.parameters()) + list(classifier.parameters()), lr=0.01)
 
-
+VERBOSE = False
 
 for epoch in range(EPOCH):
 
@@ -55,25 +63,36 @@ for epoch in range(EPOCH):
     for i, point in enumerate(points):
         # Pytorch requires this format:  (num_layers * num_directions, batch_size, hidden_dim)
         hidden = torch.zeros(1, hidden_dim)
+        if VERBOSE:
+            print('initial hidden', hidden)
 
-        X = torch.as_tensor(point).float()
-        # print("Input:", X.data)
+        X = torch.as_tensor(point)
+        if VERBOSE:
+            print("Input:", X.data)
 
         out = None
         for i in range(X.shape[0]):
             out = rnn_cell(X[i:i+1], hidden)
-            # print(f"Step {i}:, output:{out.data}, hidden:{hidden.data}")
             hidden = out
+            if VERBOSE:
+                print(f"Step {i}: hidden:{hidden.data}")
 
         # We will feed the last "out" to the classifier
-        classifier_outputs.append(classifier(out))
+        if VERBOSE:
+            print('What are we feeding into the classifier?', out)
+        temp = classifier(out)
+        if VERBOSE:
+            print('What comes out from the classifier?', temp)
+
+        classifier_outputs.append(temp)
 
     ###################### end of Y_hat ######################
 
     # Convert [ tensor, .. ] to tensor([float, ...])
     # print("Classifier (Before)", classifier_outputs)
     classifier_outputs_tensor = torch.cat(classifier_outputs).view(-1).to(torch.float64)
-    # print("Classifier (After)", classifier_outputs_tensor)
+    if VERBOSE:
+        print("Classifier (After)", classifier_outputs_tensor)
 
     # Convert directions numpy array to a PyTorch tensor
     # print("Directions (Before)", directions)
@@ -82,10 +101,10 @@ for epoch in range(EPOCH):
 
     # Now we need to compute loss
     training_loss = loss(classifier_outputs_tensor, directions_tensor)
+    print(f"Epoch:{epoch}, training_loss:{training_loss.data}")
 
     training_loss.backward()
     optimizer.step()
     optimizer.zero_grad()
 
-    print(f"Epoch:{epoch}, training_loss:{training_loss.data}")
 
