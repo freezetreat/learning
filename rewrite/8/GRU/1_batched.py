@@ -37,7 +37,7 @@ DATA_SIZE = args.N
 
 
 ### RNN
-torch.manual_seed(19)
+torch.manual_seed(17)
 torch.set_default_dtype(torch.float64)
 
 n_features = 2
