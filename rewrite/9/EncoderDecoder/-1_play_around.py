@@ -67,26 +67,39 @@ print("Decoder RNN state", decoder_rnn.state_dict())
 decoder_linear = nn.Linear(hidden_dim, n_features)
 print("Decoder Linear state", decoder_linear.state_dict())
 
+EPOCH = 1
+for i in range(EPOCH):
+    ## Encoder
 
-## Encoder
+    # output is the hidden states of the TWO points that you fed into it
+    # output: tensor([[[6.2459e-01, 4.6589e-05],
+    #         [9.3809e-01, 8.1336e-04]]], grad_fn=<TransposeBackward1>)
+    # encoder_hidden:
+    #       tensor([[[9.3809e-01, 8.1336e-04]]], grad_fn=<StackBackward0>)
+    output, encoder_hidden = encoder_rnn(source_seq)
 
-# output is the hidden states of the TWO points that you fed into it
-output, encoder_hidden = encoder_rnn(source_seq)
+    ## Decode
 
-# output: tensor([[[6.2459e-01, 4.6589e-05],
-#         [9.3809e-01, 8.1336e-04]]], grad_fn=<TransposeBackward1>)
-# encoder_hidden:
-#       tensor([[[9.3809e-01, 8.1336e-04]]], grad_fn=<StackBackward0>)
+    # Initial Hidden State will be encoder's final hidden state
+    decoder_output_1, decoder_hidden_1 = decoder_rnn(output, encoder_hidden)
+    output_1 = decoder_linear(decoder_output_1)
+    decoder_output_2, decoder_hidden_2 = decoder_rnn(output_1, decoder_hidden_1)
 
 
-## Decode
 
-# Initial Hidden State will be encoder's final hidden state
-decoder_output_1, decoder_hidden_1 = decoder_rnn(output, encoder_hidden)
+"""
+Encoder
+    Input: x0, x1
+    Output: hidden state
 
-output_1 = decoder_linear(decoder_output_1)
+Decoder
+    Input: x1, hidden state
+    Output: x2, x3
 
-decoder_output_2, decoder_hidden_2 = decoder_rnn(output_1, decoder_hidden_1)
+Thus a encoder should be judged on its ability to generate a good hidden state
+while a decoder should be judged on its ability to generate the x2 and x3. However,
+you can't really "judge" a hidden state.
 
-print(decoder_output_1)
-print(decoder_output_2)
+Instead, we will first train the decoder, then train the encoder. But how do you get
+the hidden state in the first place?
+"""
