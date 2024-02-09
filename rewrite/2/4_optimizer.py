@@ -16,7 +16,6 @@
 
 import torch
 import torch.optim as optim
-from torchviz import make_dot
 import numpy as np
 
 # Data Generation

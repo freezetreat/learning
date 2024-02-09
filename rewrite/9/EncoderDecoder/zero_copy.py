@@ -46,7 +46,6 @@ class Encoder(nn.Module):
 
     def forward(self, X):
         rnn_out, self.hidden = self.basic_rnn(X)
-
         return rnn_out # N, L, F
 
 
