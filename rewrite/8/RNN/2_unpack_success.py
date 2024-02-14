@@ -4,7 +4,6 @@
 import math
 import torch.nn as nn
 import torch
-from torchviz import make_dot
 from torch import optim
 
 import logging
@@ -69,7 +68,7 @@ optimizer = optim.Adam(list(classifier.parameters()) + rnn_params, lr=0.01)
 
 VERBOSE = False
 # points, directions = points[:1], directions[:1]
-EPOCH = 100
+EPOCH = 20
 for epoch in range(EPOCH):
 
     ###################### Y_hat ######################
@@ -131,6 +130,7 @@ for epoch in range(EPOCH):
 
     ###################### end of Y_hat ######################
 
+
     # Classifier outputs becomes a list of tensor due to classifier
     classifier_outputs_tensor = torch.cat(classifier_outputs).view(-1).to(torch.float64)
     directions_tensor = torch.tensor(directions, dtype=torch.float64)
@@ -149,5 +149,6 @@ for epoch in range(EPOCH):
     training_loss.backward()
     optimizer.step()
     optimizer.zero_grad()
+
 
 

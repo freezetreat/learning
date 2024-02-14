@@ -2,7 +2,6 @@
 
 import torch.nn as nn
 import torch
-from torchviz import make_dot
 from torch import optim
 
 import logging
@@ -31,16 +30,23 @@ hidden_dim = 2
 
 rnn_cell = nn.RNNCell(input_size=n_features, hidden_size=hidden_dim)
 rnn_state = rnn_cell.state_dict()
-print(rnn_state)
+print('rnn cell', rnn_state)
+# OrderedDict(
+#     {'weight_ih': tensor([[ 0.3519, -0.6514], [ 0.3238,  0.5568]]),
+#      'bias_ih': tensor([0.2198, 0.4712]),
+#      'weight_hh': tensor([[ 0.4279,  0.6832], [-0.4114,  0.5715]]),
+#      'bias_hh': tensor([-0.4090, -0.1299])})
 
 ## Don't touch the classifier, our focus is on RNN rather than classifier
 classifier = nn.Linear(hidden_dim, 1)
 classifier.weight.data = torch.tensor([[-0.2732, -0.1587]], dtype=torch.float64)
 classifier.bias.data = torch.tensor([0.5806], dtype=torch.float64)
 print('classifier:', classifier.state_dict())
+# classifier: OrderedDict({'weight': tensor([[-0.2732, -0.1587]]), 'bias': tensor([0.5806])})
+
 # ALWAYS CHECK DEFAULT WEIGHTS. THEY MIGHT CHANGE AFTER YOU CHANGE DATA TYPES
 
-EPOCH = 100
+EPOCH = 20
 # points, directions = points[:1], directions[:1]
 
 
