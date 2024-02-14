@@ -98,7 +98,7 @@ class RNN2Classifier(nn.Module):
 
         for corners in X:
             # This gets fed into the classifier, no need to assign it
-            hidden = torch.tensor([0., 0.], requires_grad=True)
+            hidden = torch.tensor([0., 0.], requires_grad=False)
             if VERBOSE:
                 print('initial hidden', hidden)
 
