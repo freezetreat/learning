@@ -40,20 +40,16 @@ hidden_dim = 2
 
 # Cell: book uses "ih"
 
-## Don't touch the classifier, our focus is on RNN rather than classifier
-classifier = nn.Linear(hidden_dim, 1)
-classifier.weight.data = torch.tensor([[-0.2732, -0.1587]], dtype=torch.float64)
-classifier.bias.data = torch.tensor([0.5806], dtype=torch.float64)
-print('classifier:', classifier.state_dict())
-# ALWAYS CHECK DEFAULT WEIGHTS. THEY MIGHT CHANGE AFTER YOU CHANGE DATA TYPES
-
 
 VERBOSE = False
 
-class RNN(nn.Module):
+class RNN2Classifier(nn.Module):
     def __init__(self):
         super().__init__()
+        self.init_RNN()
+        self.init_classifier()
 
+    def init_RNN(self):
         self.weight_ih = nn.Parameter(torch.tensor([
             [ 0.3519, -0.6514],
             [ 0.3238,  0.5568]
@@ -71,6 +67,14 @@ class RNN(nn.Module):
         self.bias_hh = nn.Parameter(torch.tensor(
             [-0.4090, -0.1299],
         dtype=torch.float64, requires_grad=True))
+
+    def init_classifier(self):
+        ## Don't touch the classifier, our focus is on RNN rather than classifier
+        self.classifier = nn.Linear(hidden_dim, 1)
+        self.classifier.weight.data = torch.tensor([[-0.2732, -0.1587]], dtype=torch.float64)
+        self.classifier.bias.data = torch.tensor([0.5806], dtype=torch.float64)
+        print('classifier:', self.classifier.state_dict())
+        # ALWAYS CHECK DEFAULT WEIGHTS. THEY MIGHT CHANGE AFTER YOU CHANGE DATA TYPES
 
     def forward(self, X):
         """Reads a list of 4 points and outputs the hidden state for classification
@@ -132,18 +136,24 @@ class RNN(nn.Module):
                 if VERBOSE:
                     print(f"Step: hidden:{hidden}")
 
-            ret.append(hidden)
+            # No need to wrap and reinitialize hidden again,
+            # just reshape it to the shape classifier expects
+            hidden = hidden.unsqueeze(0)
+            temp = self.classifier(hidden)
+            ret.append(temp)
+            #print(temp)
 
         return ret
 
 
 
-model = RNN()
 
-from itertools import chain
 
-optimizer = optim.Adam(
-    chain(classifier.parameters(), model.parameters()), lr=0.01)
+
+
+model = RNN2Classifier()
+
+optimizer = optim.Adam(model.parameters(), lr=0.01)
 
 loss = nn.BCEWithLogitsLoss()   # just sigmod with BCELoss
 
@@ -152,25 +162,18 @@ EPOCH = 20
 for epoch in range(EPOCH):
 
     model.train()
-    RNN_output = model(points)
-
-    classifier_outputs = []
-    for x in RNN_output:
-        # No need to wrap and reinitialize hidden again,
-        # just reshape it to the shape classifier expects
-        hidden = x.unsqueeze(0)
-        classifier_outputs.append(classifier(hidden))
+    Y_hat = model(points)
 
     ## Copied directly from 2_unpack_success
 
     # Classifier outputs becomes a list of tensor due to classifier
-    classifier_outputs_tensor = torch.cat(classifier_outputs).view(-1).to(torch.float64)
-    directions_tensor = torch.tensor(directions, dtype=torch.float64)
+    Y_hat_tensor = torch.cat(Y_hat).view(-1).to(torch.float64)
+    Y_tensor = torch.tensor(directions, dtype=torch.float64)
 
     # print('classifier_outputs_tensor', classifier_outputs)
     # print('directions_tensor', directions_tensor)
 
-    training_loss = loss(classifier_outputs_tensor, directions_tensor)
+    training_loss = loss(Y_hat_tensor, Y_tensor)
 
     print(f"Epoch:{epoch}, training_loss:{training_loss.data}")
 
