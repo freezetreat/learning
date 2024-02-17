@@ -13,6 +13,11 @@ import logging
 logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.DEBUG)
 
 import pickle
+import math
+import torch
+from torch import optim
+import logging
+import pickle
 with open('random_data.pickle', 'rb') as inf:
     d = pickle.load(inf)
 
@@ -184,4 +189,5 @@ for epoch in range(EPOCH):
     training_loss.backward()
     optimizer.step()
     optimizer.zero_grad()
+
 
