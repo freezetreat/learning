@@ -5,7 +5,6 @@ import torch.nn as nn
 import torch.optim as optim
 import random
 from copy import deepcopy
-from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import LambdaLR
 
 

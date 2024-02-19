@@ -16,11 +16,10 @@ class Encoder(nn.Module):
         self.hidden_dim = hidden_dim
         self.n_features = n_features
         self.hidden = None
-        self.basic_rnn = nn.GRU(self.n_features, self.hidden_dim, batch_first=True)
+        self.basic_rnn = nn.RNN(self.n_features, self.hidden_dim, batch_first=True)
 
     def forward(self, X):
         rnn_out, self.hidden = self.basic_rnn(X)
-
         return rnn_out # N, L, F
 
 
@@ -30,7 +29,7 @@ class Decoder(nn.Module):
         self.hidden_dim = hidden_dim
         self.n_features = n_features
         self.hidden = None
-        self.basic_rnn = nn.GRU(self.n_features, self.hidden_dim, batch_first=True)
+        self.basic_rnn = nn.RNN(self.n_features, self.hidden_dim, batch_first=True)
         self.regression = nn.Linear(self.hidden_dim, self.n_features)
 
     def init_hidden(self, hidden_seq):
@@ -72,6 +71,15 @@ class EncoderDecoder(nn.Module):
         self.outputs[:, i:i+1, :] = out
 
     def forward(self, X):
+        """
+        > Question: how come the encoder part doesn't need to loop
+        whereas the decode part needs to?
+
+        The encoder processes the entire input sequence at once to capture its
+        overall context into a set of hidden states.  The decoder generates the
+        output sequence one step at a time, using the context provided by the encoder
+        and the dependencies between the elements of the output sequence.
+        """
         # splits the data in source and target sequences
         # the target seq will be empty in testing mode
         # N, L, F
@@ -116,7 +124,7 @@ if __name__ == "__main__":
     torch.manual_seed(23)
     encoder = Encoder(n_features=2, hidden_dim=2)
     decoder = Decoder(n_features=2, hidden_dim=2)
-    model = EncoderDecoder(encoder, decoder, input_len=2, target_len=2, teacher_forcing_prob=0.5)
+    model = EncoderDecoder(encoder, decoder, input_len=2, target_len=2, teacher_forcing_prob=0)
     loss = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.01)
 
@@ -142,5 +150,6 @@ if __name__ == "__main__":
 
     sbs_seq = StepByStep(model, loss, optimizer)
     sbs_seq.set_loaders(train_loader, test_loader)
-    sbs_seq.train(100)
+    sbs_seq.train(20)
+
 
