@@ -1,0 +1,230 @@
+# Unwrapping everything to demonstrate your understanding
+# 1.3.1 Batching decoder - Since we are not using teacher enforcing, we do not need
+# to feed (1, 2, 2) into decoder's forward method
+
+import copy
+import numpy as np
+
+import torch
+import torch.optim as optim
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import DataLoader, Dataset, random_split, TensorDataset
+
+from StepByStep import StepByStep
+
+torch.manual_seed(23)
+
+class Encoder(nn.Module):
+    def __init__(self, n_features, hidden_dim):
+        super().__init__()
+        self.hidden_dim = hidden_dim
+        self.n_features = n_features
+
+        """
+        batch_first – If True, then the input and output tensors are provided as
+        (batch, seq, feature) instead of (seq, batch, feature). Note that this does
+        not apply to hidden or cell states. See the Inputs/Outputs sections below for
+        details. Default: False
+
+        Remember, the input to RNN is (128, 2, 2) {128 rows, 2 points, x and y}.
+        This is in the format of (N, L, F)
+
+        batch_first expects N, L, F
+        batch_first=False expects L, N, F
+
+        > Without batch_first, the hidden layer output is:
+        tensor([[[-0.7281, -0.8194],
+                [-0.9378, -0.5947]]], grad_fn=<StackBackward0>)
+
+        This is because w/o batch_first, rnn thought L=128, N=2, F=2, meaning:
+            2 rows, each with 128 points and each points with 2 features.
+            Therefore, there will be 2 hidden states produced.
+
+        > With batch_first=true, the hidden layer output is:
+        tensor([[[ 0.4347, -0.0482],
+            [-0.3260,  0.4595],
+            [ 0.0828, -0.3325],
+            ...
+            (1 for each row)
+
+        Here, the RNN treats our input as N=128, L=2, F=2 which is what we intended.
+
+        N => batch size, aka how many rows in your data
+        L => sequence length, aka how many points in each row
+        F => number of features, aka how many x, y, z in each of your points
+        """
+        rnn = nn.RNN(input_size=2, hidden_size=2, num_layers=1, nonlinearity='tanh', batch_first=True)
+
+        # Assign custom weights and biases
+        with torch.no_grad():
+            rnn.weight_ih_l0 = nn.Parameter(torch.tensor([
+                [0.6627, -0.4245], [0.5373, 0.2294]
+            ], dtype=torch.float64, requires_grad=True))
+
+            rnn.bias_ih_l0 = nn.Parameter(torch.tensor([0.4954, 0.6533], dtype=torch.float64, requires_grad=True))
+
+            rnn.weight_hh_l0 = nn.Parameter(torch.tensor([
+                [-0.4015, -0.5385], [-0.1956, -0.6835]
+            ], dtype=torch.float64, requires_grad=True))
+
+            rnn.bias_hh_l0 = nn.Parameter(torch.tensor([-0.3565, -0.2904], dtype=torch.float64, requires_grad=True))
+
+        self.rnn = rnn
+
+    def forward(self, list_of_two_points):
+        """Now batching. Returns a list of h1s
+
+        NOTE: hidden is always initialized as zero, so we can do that here.
+        """
+        return self.rnn(list_of_two_points)
+
+
+class Decoder(nn.Module):
+    def __init__(self, n_features, hidden_dim):
+        super().__init__()
+        self.hidden_dim = hidden_dim
+        self.n_features = n_features
+        self.regression = nn.Linear(self.hidden_dim, self.n_features, dtype=torch.float64)
+        self.rnn = nn.RNN(input_size=2, hidden_size=2, num_layers=1, nonlinearity='tanh', batch_first=True)
+
+        with torch.no_grad():
+            self.regression.weight.data = torch.tensor([
+                [-0.1802, -0.3691],
+                [-0.0514, 0.4502]], dtype=torch.float64)
+            self.regression.bias.data = torch.tensor(
+                [0.3566, -0.3189], dtype=torch.float64)
+
+            self.rnn.weight_ih_l0 = nn.Parameter(torch.tensor([
+                [0.6627, -0.4245], [ 0.5373,  0.2294]
+            ], dtype=torch.float64, requires_grad=True))
+            self.rnn.bias_ih_l0 = nn.Parameter(torch.tensor(
+                [0.4954, 0.6533], dtype=torch.float64, requires_grad=True))
+            # Hidden
+            self.rnn.weight_hh_l0 = nn.Parameter(torch.tensor([
+                [-0.4015, -0.5385], [-0.1956, -0.6835]
+            ], dtype=torch.float64, requires_grad=True))
+            self.rnn.bias_hh_l0 = nn.Parameter(torch.tensor(
+                [-0.3565, -0.2904], dtype=torch.float64, requires_grad=True))
+
+    def forward(self, x1s, h1s):
+        """x1s is a tensor of x_1 points (2nd point)
+        h1s is a tensor of h_1 (2nd hidden state)
+
+        The reason why this wouldn't work is because rnn will feed h_2 into rnn
+        itself. Instead, we want to feed h_2 into a regression layer to get x_2, and
+        then feeding x_2 back into the RNN
+        """
+        # print('x1s', x1s.size()) > (128, 1, 2)
+        # print('h1s', h1s.size()) > (1, 128, 2)
+
+        useless, h2s = self.rnn(x1s, h1s)
+        x2s = self.regression(h2s)
+
+        # print('x2s', x2s.size()) > (1, 128, 2)
+        # print('h2s', h2s.size()) > (1, 128, 2)
+        # We need to change x2s from (1, 128, 2) to (128, 1, 2)
+        x2s = x2s.view(128, 1, 2)
+
+        useless, h3s = self.rnn(x2s, h2s)
+        x3s = self.regression(h3s)
+        x3s = x3s.view(128, 1, 2)
+
+        # Now we just have to join x2s and x3s into (128, 2, 2)
+        return torch.cat([x2s, x3s], dim=1), h3s
+
+
+class EncoderDecoder(nn.Module):
+    def __init__(self, encoder, decoder, input_len, target_len, teacher_forcing_prob=0.5):
+        super().__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+        self.input_len = input_len
+        self.target_len = target_len
+        self.teacher_forcing_prob = teacher_forcing_prob
+        self.outputs = None
+
+    def init_outputs(self, batch_size):
+        device = next(self.parameters()).device
+        # N, L (target), F
+        self.outputs = torch.zeros(batch_size,
+                              self.target_len,
+                              self.encoder.n_features).to(device)
+
+    def store_output(self, i, out):
+        # Stores the output
+        self.outputs[:, i:i+1, :] = out
+
+    def forward(self, X):
+        """X is a tensor of shape N, 4, 2
+        which means a list of N rows, each row has 4 points, each point have 2 dim
+        """
+        ## Encoder, now batching
+
+        # no need to provide hidden, it will always be initialized to 0
+        first_two_points = X[:, :2]      # all rows, index up to 2
+        useless, h1s = self.encoder(first_two_points)
+        # print(h1s.size()) -> (1, 128, 2)
+
+        ## Decoder, now batching
+        second_points = X[:, 1]     # all rows, index 1 which is x_1
+        # print(second_points.size()) > torch.Size([128, 2])
+        # Shape should be (128, 2, 2) per pytorch's guidance
+        second_points = second_points.unsqueeze(1)
+        # print(second_points.size()) > (128, 1, 2)
+
+        # Per pytorch documentation, when batch_first=True,
+        # input is expected to have (N, L, H_in)
+        # h_0 to have (num_layers, N, H_out)
+        points_3_and_4, hidden = self.decoder(
+            second_points,
+            h1s
+        )
+
+        return points_3_and_4
+
+
+
+
+if __name__ == "__main__":
+
+    torch.set_default_dtype(torch.float64)
+
+    encoder = Encoder(n_features=2, hidden_dim=2)
+    decoder = Decoder(n_features=2, hidden_dim=2)
+    model = EncoderDecoder(encoder, decoder, input_len=2, target_len=2, teacher_forcing_prob=0.5)
+    loss = nn.MSELoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.01)
+
+    import pickle
+    with open('random_data.pickle', 'rb') as inf:
+        data = pickle.load(inf)
+
+    # train_points and test_points each have 4 points
+    train_points, train_directions = torch.tensor(data['points']), data['directions']
+    test_points, test_directions = torch.tensor(data['test_points']), data['test_directions']
+
+    # Shape of (128, 2, 2)
+    train_last2_points = train_points[:, 2:]        # all rows, index 2 onwards
+    test_last2_points = test_points[:, 2:]
+
+    EPOCH = 20
+    for epoch in range(EPOCH):
+        model.train()
+
+        # Now model takes in a list of 4 points
+        y_hat = model(train_points)
+        # print(y_hat.size()) > (128, 2, 2)
+
+        training_loss = loss(y_hat, train_last2_points)
+
+        training_loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+
+        with torch.no_grad():
+            model.eval()
+            y_hat = model(test_points)
+            testing_loss = loss(y_hat, test_last2_points)
+
+        print(f'Epoch:{epoch} training:{training_loss:,.3f} validation:{testing_loss:,.3f}')
