@@ -20,60 +20,63 @@ class Encoder(nn.Module):
         self.hidden_dim = hidden_dim
         self.n_features = n_features
 
-        self.weight_ih = nn.Parameter(torch.tensor([
-            [0.6627, -0.4245], [ 0.5373,  0.2294]
-        ], dtype=torch.float64, requires_grad=True))
-        self.bias_ih = nn.Parameter(torch.tensor([0.4954, 0.6533], dtype=torch.float64, requires_grad=True))
+        """
+        batch_first – If True, then the input and output tensors are provided as
+        (batch, seq, feature) instead of (seq, batch, feature). Note that this does
+        not apply to hidden or cell states. See the Inputs/Outputs sections below for
+        details. Default: False
 
-        # Hidden
-        self.weight_hh = nn.Parameter(torch.tensor([
-            [-0.4015, -0.5385], [-0.1956, -0.6835]
-        ], dtype=torch.float64, requires_grad=True))
-        self.bias_hh = nn.Parameter(torch.tensor([-0.3565, -0.2904], dtype=torch.float64, requires_grad=True))
+        Remember, the input to RNN is (128, 2, 2) {128 rows, 2 points, x and y}.
+        This is in the format of (N, L, F)
+
+        batch_first expects N, L, F
+        batch_first=False expects L, N, F
+
+        > Without batch_first, the hidden layer output is:
+        tensor([[[-0.7281, -0.8194],
+                [-0.9378, -0.5947]]], grad_fn=<StackBackward0>)
+
+        This is because w/o batch_first, rnn thought L=128, N=2, F=2, meaning:
+            2 rows, each with 128 points and each points with 2 features.
+            Therefore, there will be 2 hidden states produced.
+
+        > With batch_first=true, the hidden layer output is:
+        tensor([[[ 0.4347, -0.0482],
+            [-0.3260,  0.4595],
+            [ 0.0828, -0.3325],
+            ...
+            (1 for each row)
+
+        Here, the RNN treats our input as N=128, L=2, F=2 which is what we intended.
+
+        N => batch size, aka how many rows in your data
+        L => sequence length, aka how many points in each row
+        F => number of features, aka how many x, y, z in each of your points
+        """
+        rnn = nn.RNN(input_size=2, hidden_size=2, num_layers=1, nonlinearity='tanh', batch_first=True)
+
+        # Assign custom weights and biases
+        with torch.no_grad():
+            rnn.weight_ih_l0 = nn.Parameter(torch.tensor([
+                [0.6627, -0.4245], [0.5373, 0.2294]
+            ], dtype=torch.float64, requires_grad=True))
+
+            rnn.bias_ih_l0 = nn.Parameter(torch.tensor([0.4954, 0.6533], dtype=torch.float64, requires_grad=True))
+
+            rnn.weight_hh_l0 = nn.Parameter(torch.tensor([
+                [-0.4015, -0.5385], [-0.1956, -0.6835]
+            ], dtype=torch.float64, requires_grad=True))
+
+            rnn.bias_hh_l0 = nn.Parameter(torch.tensor([-0.3565, -0.2904], dtype=torch.float64, requires_grad=True))
+
+        self.rnn = rnn
 
     def forward(self, list_of_two_points):
         """Now batching. Returns a list of h1s
 
         NOTE: hidden is always initialized as zero, so we can do that here.
         """
-        #output, new_hidden = self.basic_rnn(point)
-
-        # h0 is the hidden state after consuming x0
-        # h1 is the hidden state after consuming x1
-        h1s = []
-
-        for two_points in list_of_two_points:
-            hidden = torch.tensor([0, 0], dtype=torch.float64)
-
-            for point in two_points:
-                x_cord, y_cord = point
-
-                ix = x_cord * self.weight_ih[0][0] \
-                    + y_cord * self.weight_ih[0][1] \
-                    + self.bias_ih[0]
-
-                iy = x_cord * self.weight_ih[1][0] \
-                    + y_cord * self.weight_ih[1][1] \
-                    + self.bias_ih[1]
-
-                hx = hidden[0] * self.weight_hh[0][0] \
-                    + hidden[1] * self.weight_hh[0][1] \
-                    + self.bias_hh[0]
-
-                hy = hidden[0] * self.weight_hh[1][0] \
-                    + hidden[1] * self.weight_hh[1][1] \
-                    + self.bias_hh[1]
-
-                pretan_x = ix + hx
-                pretan_y = iy + hy
-
-                # Now we want to overwrite hidden to the new
-                hidden = torch.stack([torch.tanh(pretan_x), torch.tanh(pretan_y)])
-
-            # At this point, hidden should be h1
-            h1s.append(hidden)
-
-        return h1s
+        return self.rnn(list_of_two_points)
 
 
 class Decoder(nn.Module):
@@ -104,8 +107,6 @@ class Decoder(nn.Module):
         """Still takes in one at a time
         """
         x_cord, y_cord = point
-
-        # No need to round! Pytorch only displays up to 4 decimal but it stores more
 
         ix = x_cord * self.weight_ih[0][0] \
             + y_cord * self.weight_ih[0][1] \
@@ -152,20 +153,32 @@ class EncoderDecoder(nn.Module):
         # Stores the output
         self.outputs[:, i:i+1, :] = out
 
-    def forward(self, list_of_four_pts):
+    def forward(self, X):
+        """X is a tensor of shape N, 4, 2
+        which means a list of N rows, each row has 4 points, each point have 2 dim
+        """
         ## Encoder, now batching
 
         # no need to provide hidden, it will always be initialized to 0
-        list_of_two_pts = [four_pts[:2] for four_pts in list_of_four_pts]
-        h1s = self.encoder(list_of_two_pts)
+        first_two_points = X[:, :2]      # all rows, index up to 2
+        useless, h1s = self.encoder(first_two_points)
 
         ## Decoder, no batching yet
         y_hat = []
 
-        for i, four_pts in enumerate(list_of_four_pts):
+        for i, four_pts in enumerate(X):
             row_output = []
-            input_pt = four_pts[1]     # starts off as 2nd point, then 3rd ...
-            hidden = h1s[i]         # start of as h1, then h2 then h3
+            input_pt = four_pts[1]      # starts off as 2nd point, then 3rd ...
+
+            """
+            h1s has 1 batch, 128 rows, 2 feature
+            tensor([[[ 0.4347, -0.0482],
+                [-0.3260,  0.4595],
+                [ 0.0828, -0.3325],
+                [-0.5562,  0.3439],
+                ...
+            """
+            hidden = h1s[0][i]      # first batch, ith row
 
             for i in range(2):
                 # Applies RNN and Regression
@@ -175,6 +188,17 @@ class EncoderDecoder(nn.Module):
 
             y_hat.append(row_output)
 
+        """
+        y_hat is like this:
+        [
+            [
+                tensor([ 0.0463, -0.1364], grad_fn=<ViewBackward0>),
+                tensor([ 0.4567, -0.3558], grad_fn=<ViewBackward0>)
+            ],
+            [
+                tensor([ 0.0735, -0.0274], grad_fn=<ViewBackward0>),
+                tensor([ 0.4363, -0.3519], grad_fn=<ViewBackward0>)],
+        """
         return y_hat
 
 
@@ -195,11 +219,12 @@ if __name__ == "__main__":
         data = pickle.load(inf)
 
     # train_points and test_points each have 4 points
-    train_points, train_directions = data['points'], data['directions']
-    test_points, test_directions = data['test_points'], data['test_directions']
+    train_points, train_directions = torch.tensor(data['points']), data['directions']
+    test_points, test_directions = torch.tensor(data['test_points']), data['test_directions']
 
-    train_last2_points = [pts[2:] for pts in train_points]
-    test_last2_points = [pts[2:] for pts in test_points]
+    # Shape of (128, 2, 2)
+    train_last2_points = train_points[:, 2:]        # all rows, index 2 onwards
+    test_last2_points = test_points[:, 2:]
 
     EPOCH = 20
     for epoch in range(EPOCH):
@@ -207,14 +232,15 @@ if __name__ == "__main__":
 
         # Now model takes in a list of 4 points
         y_hat = model(train_points)
+        # y_hat is a list of 128 rows, each row has 2 points, each point has 2 dim
 
-        # from chatgpt to convert list of points to tensor for loss fn
-        y_hat_tensors = [torch.stack(tensors) for tensors in y_hat]  # This stacks tensors within each sublist
-        y_hat_tensor = torch.cat(y_hat_tensors, dim=0)  # Concatenate along the first dimension
-        train_last2_points_tensor = torch.Tensor(train_last2_points)  # This assumes train_last2_points is suitable for direct conversion
-        train_last2_points_tensor = train_last2_points_tensor.view(-1, 2)  # Adjust the shape as necessary, here assuming each point is of dimension 2
+        # Convert y_hat to tensor (128, 2, 2)
+        # First, ensure each pair is stacked to form a tensor of shape [2, 2]
+        y_hat_pairs = [torch.stack(pair).squeeze(1) for pair in y_hat]  # This may require adjustment based on the exact shape of tensors in y_hat
+        # Now, stack these pairs along a new dimension to get a tensor of shape [128, 2, 2]
+        y_hat_tensor = torch.stack(y_hat_pairs)  # Resulting shape will be [128, 2, 2]
+        training_loss = loss(y_hat_tensor, train_last2_points)
 
-        training_loss = loss(y_hat_tensor, train_last2_points_tensor)
         training_loss.backward()
         optimizer.step()
         optimizer.zero_grad()
@@ -222,13 +248,8 @@ if __name__ == "__main__":
         with torch.no_grad():
             model.eval()
             y_hat = model(test_points)
-
-            # from chatgpt to convert list of points to tensor for loss fn
-            y_hat_tensors = [torch.stack(tensors) for tensors in y_hat]  # This stacks tensors within each sublist
-            y_hat_tensor = torch.cat(y_hat_tensors, dim=0)  # Concatenate along the first dimension
-            test_last2_points_tensor = torch.Tensor(test_last2_points)  # This assumes test_last2_points is suitable for direct conversion
-            test_last2_points_tensor = test_last2_points_tensor.view(-1, 2)  # Adjust the shape as necessary, here assuming each point is of dimension 2
-
-            testing_loss = loss(y_hat_tensor, test_last2_points_tensor)
+            y_hat_pairs = [torch.stack(pair).squeeze(1) for pair in y_hat]  # This may require adjustment based on the exact shape of tensors in y_hat
+            y_hat_tensor = torch.stack(y_hat_pairs)  # Resulting shape will be [128, 2, 2]
+            testing_loss = loss(y_hat_tensor, test_last2_points)
 
         print(f'Epoch:{epoch} training:{training_loss:,.3f} validation:{testing_loss:,.3f}')
