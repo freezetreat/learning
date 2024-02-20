@@ -1,5 +1,5 @@
 # Unwrapping everything to demonstrate your understanding
-# 1.1 Batching in ENCODER only, not in decoder
+# 1.3 Both encoder and decoder use pytorch.rnn
 
 import copy
 import numpy as np
@@ -85,6 +85,8 @@ class Decoder(nn.Module):
         self.hidden_dim = hidden_dim
         self.n_features = n_features
         self.regression = nn.Linear(self.hidden_dim, self.n_features, dtype=torch.float64)
+        self.rnn = nn.RNN(input_size=2, hidden_size=2, num_layers=1, nonlinearity='tanh', batch_first=True)
+
         with torch.no_grad():
             self.regression.weight.data = torch.tensor([
                 [-0.1802, -0.3691],
@@ -92,41 +94,37 @@ class Decoder(nn.Module):
             self.regression.bias.data = torch.tensor(
                 [0.3566, -0.3189], dtype=torch.float64)
 
-        self.weight_ih = nn.Parameter(torch.tensor([
-            [0.6627, -0.4245], [ 0.5373,  0.2294]
-        ], dtype=torch.float64, requires_grad=True))
-        self.bias_ih = nn.Parameter(torch.tensor([0.4954, 0.6533], dtype=torch.float64, requires_grad=True))
-
-        # Hidden
-        self.weight_hh = nn.Parameter(torch.tensor([
-            [-0.4015, -0.5385], [-0.1956, -0.6835]
-        ], dtype=torch.float64, requires_grad=True))
-        self.bias_hh = nn.Parameter(torch.tensor([-0.3565, -0.2904], dtype=torch.float64, requires_grad=True))
+            self.rnn.weight_ih_l0 = nn.Parameter(torch.tensor([
+                [0.6627, -0.4245], [ 0.5373,  0.2294]
+            ], dtype=torch.float64, requires_grad=True))
+            self.rnn.bias_ih_l0 = nn.Parameter(torch.tensor(
+                [0.4954, 0.6533], dtype=torch.float64, requires_grad=True))
+            # Hidden
+            self.rnn.weight_hh_l0 = nn.Parameter(torch.tensor([
+                [-0.4015, -0.5385], [-0.1956, -0.6835]
+            ], dtype=torch.float64, requires_grad=True))
+            self.rnn.bias_hh_l0 = nn.Parameter(torch.tensor(
+                [-0.3565, -0.2904], dtype=torch.float64, requires_grad=True))
 
     def forward(self, point, hidden):
-        """Still takes in one at a time
+        """To use torch.RNN, we just package point and hidden into
+        (N=1, L, F) with batch_first=True. This means each batch only has 1 row
         """
-        x_cord, y_cord = point
+        # Refer to https://stackoverflow.com/questions/57237352/what-does-unsqueeze-do-in-pytorch
+        # on how squeezing and unsqueezing works
 
-        ix = x_cord * self.weight_ih[0][0] \
-            + y_cord * self.weight_ih[0][1] \
-            + self.bias_ih[0]
+        # Since point is [x, y], we need to make it [ [x, y] ] as this shape has
+        # (batch size N=1, sequence length L=1, feature number F=2)
+        # before: tensor([ 0.8055, -0.9169])
+        # after:  tensor([[ 0.8055, -0.9169]])
+        point = torch.unsqueeze(point, 0)
+        hidden = torch.unsqueeze(hidden, 0)
+        useless, new_hidden = self.rnn(point, hidden)
 
-        iy = x_cord * self.weight_ih[1][0] \
-            + y_cord * self.weight_ih[1][1] \
-            + self.bias_ih[1]
-
-        hx = hidden[0] * self.weight_hh[0][0] \
-            + hidden[1] * self.weight_hh[0][1] \
-            + self.bias_hh[0]
-
-        hy = hidden[0] * self.weight_hh[1][0] \
-            + hidden[1] * self.weight_hh[1][1] \
-            + self.bias_hh[1]
-
-        pretan_x = ix + hx
-        pretan_y = iy + hy
-        new_hidden = torch.stack([torch.tanh(pretan_x), torch.tanh(pretan_y)])
+        # > new_hidden tensor([[0.3081, 0.0360]], grad_fn=<SqueezeBackward1>)
+        # Careful! new_hidden now has shape (1, 1, 2) but we want (1, 2)
+        # again, this is because we batched them as N=1
+        new_hidden = new_hidden.squeeze()
 
         new_point = self.regression(new_hidden)
         return new_point, new_hidden
@@ -189,15 +187,17 @@ class EncoderDecoder(nn.Module):
             y_hat.append(row_output)
 
         """
-        y_hat is like this:
+        y_hat is now like this:
         [
             [
-                tensor([ 0.0463, -0.1364], grad_fn=<ViewBackward0>),
-                tensor([ 0.4567, -0.3558], grad_fn=<ViewBackward0>)
-            ],
-            [
-                tensor([ 0.0735, -0.0274], grad_fn=<ViewBackward0>),
-                tensor([ 0.4363, -0.3519], grad_fn=<ViewBackward0>)],
+                tensor([
+                    [ 0.2878, -0.3185]
+                ], grad_fn=<AddmmBackward0>),
+                tensor([
+                    [ 0.4551, -0.3668]
+                ], grad_fn=<ViewBackward0>)],
+            ]
+
         """
         return y_hat
 
