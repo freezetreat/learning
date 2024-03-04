@@ -1,3 +1,5 @@
+# Rewrite how attention is calculated
+
 import copy
 import numpy as np
 
@@ -21,6 +23,7 @@ class Encoder(nn.Module):
         self.n_features = n_features
         self.hidden = None
         self.basic_rnn = nn.RNN(self.n_features, self.hidden_dim, dtype=torch.float64, batch_first=True)
+        # print("Encoder RNN", list(self.basic_rnn.named_parameters()))
         with torch.no_grad():
             # Encoder RNN weights
             self.basic_rnn.weight_ih_l0 = nn.Parameter(torch.tensor([[-0.1046, -0.1705],
