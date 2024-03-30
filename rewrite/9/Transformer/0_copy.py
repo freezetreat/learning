@@ -126,14 +126,21 @@ class Attention(nn.Module):
         """
         self.keys = keys
         self.proj_keys = self.linear_key(self.keys)
-        self.values = self.linear_value(self.keys) \
-                      if self.proj_values else self.keys
+        self.values = self.keys         # No change
+        # self.values = self.linear_value(self.keys) \
+        #               if self.proj_values else self.keys
+        # print('proj_keys', self.proj_keys)
 
     def score_function(self, query):
         proj_query = self.linear_query(query)
         # scaled dot product
         # N, 1, H x N, H, L -> N, 1, L
         dot_products = torch.bmm(proj_query, self.proj_keys.permute(0, 2, 1))
+        # Role of permute(0, 2, 1): The permute operation changes the order of the
+        # dimensions of a tensor. In this case, self.proj_keys.permute(0, 2, 1)
+        # changes the shape of self.proj_keys from (batch_size, seq_len, hidden_dim)
+        # to (batch_size, hidden_dim, seq_len).
+
         scores =  dot_products / np.sqrt(self.d_k)
         return scores
 
@@ -155,13 +162,17 @@ class Attention(nn.Module):
         is compared to each hidden output of the encoder's RNN
         """
         scores = self.score_function(query) # N, 1, L
+
         if mask is not None:
             scores = scores.masked_fill(mask == 0, -1e9)
+
         alphas = F.softmax(scores, dim=-1) # N, 1, L
         self.alphas = alphas.detach()
 
         # N, 1, L x N, L, H -> N, 1, H
         context = torch.bmm(alphas, self.values)
+        # print(context)
+        # exit()
         return context
 
 
