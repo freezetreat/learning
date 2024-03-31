@@ -1,3 +1,6 @@
+# Instead of multiplying the variables, we will use linear algebra
+# backpropagation works now!
+
 import copy
 import numpy as np
 
@@ -91,12 +94,47 @@ class DecoderAttn(nn.Module):
         return out.view(-1, 1, self.n_features)
 
 
+### Implementation
+
+import math
+
+def dot_product(vector_a, vector_b):
+    """Calculate the dot product of two vectors."""
+    if len(vector_a) != len(vector_b):
+        raise Exception(f'Different length {vector_a} {vector_b}')
+    return sum(a * b for a, b in zip(vector_a, vector_b))
+
+def matrix_vector_mul(matrix, vector):
+    """Multiply a matrix by a vector."""
+    return [dot_product(row, vector) for row in matrix]
+
+def add_vectors(vector_a, vector_b):
+    """Element-wise addition of two vectors."""
+    if len(vector_a) != len(vector_b):
+        raise Exception(f'Different length {vector_a} {vector_b}')
+    return [a + b for a, b in zip(vector_a, vector_b)]
+
+def softmax(vector):
+    """Compute softmax values for each set of scores in vector."""
+    max_val = max(vector)  # to improve numerical stability
+    exp_values = [math.exp(v - max_val) for v in vector]
+    sum_exp = sum(exp_values)
+    return [exp_val / sum_exp for exp_val in exp_values]
+
+
+
 class Attention(nn.Module):
     def __init__(self, hidden_dim, input_dim=None, proj_values=False):
         super().__init__()
         self.d_k = hidden_dim
         self.input_dim = hidden_dim if input_dim is None else input_dim
         self.proj_values = proj_values
+
+        # Initialized keys and values will be set in init_keys
+        self.keys = None
+        self.values = None
+        self.alphas = None
+
         # Affine transformations for Q, K, and V
         self.linear_query = nn.Linear(self.input_dim, hidden_dim, dtype=torch.float64)
         self.linear_key = nn.Linear(self.input_dim, hidden_dim, dtype=torch.float64)
@@ -113,7 +151,6 @@ class Attention(nn.Module):
                                                                 [0.4265, -0.3488]]))
             self.linear_value.bias = nn.Parameter(torch.tensor([-0.3975, -0.1983]))
 
-        self.alphas = None
 
     def init_keys(self, keys):
         """These are the hidden outputs of the encoder. AKA the K part in the
@@ -124,30 +161,41 @@ class Attention(nn.Module):
         guaranteed to have the same dimension as the hidden output from the decoder's
         RNN.
         """
-        self.keys = keys
-        self.proj_keys = self.linear_key(self.keys)
-        self.values = self.keys         # No change
-        # self.values = self.linear_value(self.keys) \
-        #               if self.proj_values else self.keys
-        # print('proj_keys', self.proj_keys.shape)
-        # exit()
+        # Keys has shape (batch=16, each row has 2 points, each point has 2 features)
+        self.keys = keys            # Tensor, not list
+        self.values = self.keys
 
-    def score_function(self, query):
+        self.proj_keys = []
+        for row in self.keys:
+            point0, point1 = row
+
+            proj_p0 = self.linear_key(point0)           # shape = (2)
+            proj_p1 = self.linear_key(point1)
+
+            proj_row = torch.stack([proj_p0, proj_p1])  # shape (2, 2)
+            self.proj_keys.append(proj_row)
+
+        self.proj_keys = torch.stack(self.proj_keys)    # shape (16, 2, 2)
+
+    def similarity_score_for_1query_1key(self, query, proj_key):
+        """
+        query = [[a, b]] (1, 2)
+        proj_key = [[c, d]] (1, 2)
+        returns shape of (1)
+        """
+        # print(f'being fed into similarity_score: {query} {proj_key}')
+        # (1, 2) -> self.linear_query -> (1, 2)
+
         proj_query = self.linear_query(query)
-        # scaled dot product
-        # N, 1, H x N, H, L -> N, 1, L
-        dot_products = torch.bmm(proj_query, self.proj_keys.permute(0, 2, 1))
-        # Role of permute(0, 2, 1): The permute operation changes the order of the
-        # dimensions of a tensor. In this case, self.proj_keys.permute(0, 2, 1)
-        # changes the shape of self.proj_keys from (batch_size, seq_len, hidden_dim)
-        # to (batch_size, hidden_dim, seq_len).
+        dot_product = proj_query @ proj_key
+        ret = dot_product / np.sqrt(self.d_k)
+        return ret
 
-        scores =  dot_products / np.sqrt(self.d_k)
-        return scores
+    def forward(self, query_batched, mask=None):
+        """
+        query_batched is (batch=16, 1 row, 2 dim)
 
-    def forward(self, query, mask=None):
-        """Usage:
-
+        Usage:
         1> query = batch_first_output[:, -1:]
         2> context = self.attn(query, mask=mask)
         3> concatenated = torch.cat([context, query], axis=-1)
@@ -155,24 +203,60 @@ class Attention(nn.Module):
         1. takes the last point of the output from our RNN after each iteration
         2. generate context window
         3. which will be concatenated
-        """
-        # Query is batch-first N, 1, H
 
-        """
         This "score" is how similar the hidden output from the decoder's RNN
         is compared to each hidden output of the encoder's RNN
+
+        In each batch:
+            1. we get 1 hidden state of 2 features
+            2. this hidden state multiplies with wT_h to get proj_Q
+            3. the proj_q is fed into the scoring function with the proj_key to get similarity scores
+            4. the similarities scores ....
         """
-        scores = self.score_function(query) # N, 1, L
 
-        if mask is not None:
-            scores = scores.masked_fill(mask == 0, -1e9)
+        scores = []
 
-        alphas = F.softmax(scores, dim=-1) # N, 1, L
+        # query_batched is of shape (batch_size=16, 1 point/row, 2 features)
+        for batch_idx, query_row in enumerate(query_batched):
+            # query_row is of shape (1, 2)
+
+            # Each query will match with each row of proj_keys, which has 2 points
+            # self.proj_keys[batch_idx] has shape (16, 2, 2)
+            k0, k1 = self.proj_keys[batch_idx]
+
+            # Only 2 points, we will calculate the score for both
+            score0 = self.similarity_score_for_1query_1key(query_row, k0)
+            score1 = self.similarity_score_for_1query_1key(query_row, k1)
+
+            pre_softmax = torch.stack([score0, score1], dim=1)
+            post_softmax = F.softmax(pre_softmax, dim=1)
+            scores.append(post_softmax)
+
+        alphas = torch.stack(scores)
         self.alphas = alphas.detach()
 
-        # N, 1, L x N, L, H -> N, 1, H
-        context = torch.bmm(alphas, self.values)
-        return context
+        contexts = []
+        for batch_idx, alpha_row in enumerate(alphas):
+            # print(alpha_row)  -> tensor([[0.4750, 0.5250]], grad_fn=<UnbindBackward0>)
+            # print(self.values[batch_idx]) -> tensor([[-0.5061,  0.1872], [-0.3318,  0.7027]])
+
+            alignments = []
+            for pt_idx, score_tensor in enumerate(alpha_row.squeeze()):
+                # print(f'score for this point={score_tensor}')
+                # print(f'value of this point={self.values[batch_idx][pt_idx]}')
+                # print(f'gets {score_tensor[pt_idx] * self.values[batch_idx][pt_idx]}')
+                a0a1 = score_tensor * self.values[batch_idx][pt_idx]
+                # print(f'output for this point={a0a1}')
+                alignments.append(a0a1)
+
+            tensor_w_2alignment = torch.stack(alignments)
+            contexts.append(torch.sum(tensor_w_2alignment, dim=0))
+
+        # Just matching with the output from the 0_copy
+        return torch.stack(contexts).unsqueeze(1)
+
+
+### End of implementation here
 
 
 class EncoderDecoder(nn.Module):
