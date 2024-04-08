@@ -1,5 +1,4 @@
-# Instead of multiplying the variables, we will use linear algebra
-# backpropagation works now!
+# Batching instead now. Might look very similar to 0
 
 import copy
 import numpy as np
@@ -96,32 +95,6 @@ class DecoderAttn(nn.Module):
 
 ### Implementation
 
-import math
-
-def dot_product(vector_a, vector_b):
-    """Calculate the dot product of two vectors."""
-    if len(vector_a) != len(vector_b):
-        raise Exception(f'Different length {vector_a} {vector_b}')
-    return sum(a * b for a, b in zip(vector_a, vector_b))
-
-def matrix_vector_mul(matrix, vector):
-    """Multiply a matrix by a vector."""
-    return [dot_product(row, vector) for row in matrix]
-
-def add_vectors(vector_a, vector_b):
-    """Element-wise addition of two vectors."""
-    if len(vector_a) != len(vector_b):
-        raise Exception(f'Different length {vector_a} {vector_b}')
-    return [a + b for a, b in zip(vector_a, vector_b)]
-
-def softmax(vector):
-    """Compute softmax values for each set of scores in vector."""
-    max_val = max(vector)  # to improve numerical stability
-    exp_values = [math.exp(v - max_val) for v in vector]
-    sum_exp = sum(exp_values)
-    return [exp_val / sum_exp for exp_val in exp_values]
-
-
 
 class Attention(nn.Module):
     def __init__(self, hidden_dim, input_dim=None, proj_values=False):
@@ -191,6 +164,35 @@ class Attention(nn.Module):
         ret = dot_product / np.sqrt(self.d_k)
         return ret
 
+    def similarity_score_for_query_batched(self, query_batched):
+        # query_batched is (16, 1, 2)
+        # self.proj_keys is (16, 2, 2)
+
+        self.proj_query = self.linear_query(query_batched)
+
+        """
+        proj_query = [                  # 16, 1, H
+            [[q00, q01]],
+            [[q10, q11]],
+            ... (16 times)
+        ]
+
+        proj_keys = [       `           # 16, 2, H
+            [[k00, k01], [k10, k11]],
+            ... (16 times)
+        ]
+
+        dot_product = [                 # 16, 1, H
+            [[q00 * k00 + q01 * k01, q00 * k10 + q01 * k11]],
+            ...
+        ]
+        """
+        # N, 1, H x N, H, 2 -> N, 1, 2
+
+l
+pass
+
+
     def forward(self, query_batched, mask=None):
         """
         query_batched is (batch=16, 1 row, 2 dim)
@@ -219,16 +221,12 @@ class Attention(nn.Module):
         # query_batched is of shape (batch_size=16, 1 point/row, 2 features)
         for batch_idx, query_row in enumerate(query_batched):
             # query_row is of shape (1, 2)
+            scores_for_points = []
+            for pt_idx, k in enumerate(self.proj_keys[batch_idx]):
+                scores_for_points.append(
+                    self.similarity_score_for_1query_1key(query_row, self.proj_keys[batch_idx][pt_idx]))
 
-            # Each query will match with each row of proj_keys, which has 2 points
-            # self.proj_keys[batch_idx] has shape (16, 2, 2)
-            k0, k1 = self.proj_keys[batch_idx]
-
-            # Only 2 points, we will calculate the score for both
-            score0 = self.similarity_score_for_1query_1key(query_row, k0)
-            score1 = self.similarity_score_for_1query_1key(query_row, k1)
-
-            pre_softmax = torch.stack([score0, score1], dim=1)
+            pre_softmax = torch.stack(scores_for_points, dim=1)
             post_softmax = F.softmax(pre_softmax, dim=1)
             scores.append(post_softmax)
 
