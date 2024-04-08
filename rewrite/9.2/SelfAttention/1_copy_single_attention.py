@@ -1,3 +1,6 @@
+# changing this to single attention to make things more legible.
+# Note that performance decreased slightly
+
 import copy
 import numpy as np
 
@@ -67,37 +70,6 @@ class Attention(nn.Module):
         return context
 
 
-class MultiHeadAttention(nn.Module):
-    def __init__(self, n_heads, d_model, input_dim=None, proj_values=True):
-        super().__init__()
-        self.linear_out = nn.Linear(n_heads * d_model, d_model)
-        self.attn_heads = nn.ModuleList([Attention(d_model,
-                                                   input_dim=input_dim,
-                                                   proj_values=proj_values)
-                                         for _ in range(n_heads)])
-
-    def init_keys(self, key):
-        for attn in self.attn_heads:
-            attn.init_keys(key)
-
-    @property
-    def alphas(self):
-        # Shape: n_heads, N, 1, L (source)
-        return torch.stack([attn.alphas for attn in self.attn_heads], dim=0)
-
-    def output_function(self, contexts):
-        # N, 1, n_heads * D
-        concatenated = torch.cat(contexts, axis=-1)
-        # Linear transf. to go back to original dimension
-        out = self.linear_out(concatenated) # N, 1, D
-        return out
-
-    def forward(self, query, mask=None):
-        contexts = [attn(query, mask=mask) for attn in self.attn_heads]
-        out = self.output_function(contexts)
-        return out
-
-
 class EncoderSelfAttn(nn.Module):
     def __init__(self, n_heads, d_model, ff_units, n_features=None):
         super().__init__()
@@ -105,7 +77,7 @@ class EncoderSelfAttn(nn.Module):
         self.d_model = d_model
         self.ff_units = ff_units
         self.n_features = n_features
-        self.self_attn_heads = MultiHeadAttention(n_heads, d_model, input_dim=n_features)
+        self.self_attn = Attention(d_model, input_dim=n_features)
         self.ffn = nn.Sequential(
             nn.Linear(d_model, ff_units),
             nn.ReLU(),
@@ -113,8 +85,8 @@ class EncoderSelfAttn(nn.Module):
         )
 
     def forward(self, query, mask=None):
-        self.self_attn_heads.init_keys(query)
-        att = self.self_attn_heads(query, mask)
+        self.self_attn.init_keys(query)
+        att = self.self_attn(query, mask)
         out = self.ffn(att)
         return out
 
@@ -126,8 +98,8 @@ class DecoderSelfAttn(nn.Module):
         self.d_model = d_model
         self.ff_units = ff_units
         self.n_features = d_model if n_features is None else n_features
-        self.self_attn_heads = MultiHeadAttention(n_heads, d_model, input_dim=self.n_features)
-        self.cross_attn_heads = MultiHeadAttention(n_heads, d_model)
+        self.self_attn_heads = Attention(d_model, input_dim=self.n_features)
+        self.cross_attn_heads = Attention(d_model)
         self.ffn = nn.Sequential(
             nn.Linear(d_model, ff_units),
             nn.ReLU(),
