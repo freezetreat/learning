@@ -144,8 +144,8 @@ class Attention(nn.Module):
 
         scores =  dot_products / np.sqrt(self.d_k)
 
-        print('score.shape', scores.shape)
-        exit()
+        # print('score.shape', scores.shape)
+        # exit()
         return scores
 
     def forward(self, query, mask=None):
@@ -303,8 +303,8 @@ if __name__ == "__main__":
     test_data = TensorDataset(source_test, target_test)
 
     generator = torch.Generator()
-    train_loader = DataLoader(train_data, batch_size=16, shuffle=True, generator=generator)
-    test_loader = DataLoader(test_data, batch_size=16)
+    train_loader = DataLoader(train_data, batch_size=1, shuffle=True, generator=generator)
+    test_loader = DataLoader(test_data, batch_size=1)
 
     sbs_seq = StepByStep(model, loss, optimizer)
     sbs_seq.set_loaders(train_loader, test_loader)

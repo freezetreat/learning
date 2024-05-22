@@ -12,7 +12,7 @@ from StepByStep import StepByStep
 
 
 torch.set_default_dtype(torch.float64)
-torch.manual_seed(23)
+torch.manual_seed(43)
 
 
 class Attention(nn.Module):
@@ -145,6 +145,55 @@ class DecoderSelfAttn(nn.Module):
         return out
 
 
+
+class PositionalEncoding(nn.Module):
+    def __init__(self, max_len, d_model):
+        super().__init__()
+        self.d_model = d_model
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len).float().unsqueeze(1)
+        angular_speed = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * angular_speed) # even dimensions
+        pe[:, 1::2] = torch.cos(position * angular_speed) # odd dimensions
+        self.register_buffer('pe', pe.unsqueeze(0))
+
+    def forward(self, x):
+        # x is N, L, D
+        # pe is 1, maxlen, D
+        scaled_x = x * np.sqrt(self.d_model)
+        encoded = scaled_x + self.pe[:, :x.size(1), :]
+        return encoded
+
+
+class EncoderPe(nn.Module):
+    def __init__(self, n_heads, d_model, ff_units, n_features=None, max_len=100):
+        super().__init__()
+        pe_dim = d_model if n_features is None else n_features
+        self.pe = PositionalEncoding(max_len, pe_dim)
+        self.layer = EncoderSelfAttn(n_heads, d_model, ff_units, n_features)
+
+    def forward(self, query, mask=None):
+        query_pe = self.pe(query)
+        out = self.layer(query_pe, mask)
+        return out
+
+
+class DecoderPe(nn.Module):
+    def __init__(self, n_heads, d_model, ff_units, n_features=None, max_len=100):
+        super().__init__()
+        pe_dim = d_model if n_features is None else n_features
+        self.pe = PositionalEncoding(max_len, pe_dim)
+        self.layer = DecoderSelfAttn(n_heads, d_model, ff_units, n_features)
+
+    def init_keys(self, states):
+        self.layer.init_keys(states)
+
+    def forward(self, query, source_mask=None, target_mask=None):
+        query_pe = self.pe(query)
+        out = self.layer(query_pe, source_mask, target_mask)
+        return out
+
+
 class EncoderDecoderSelfAttn(nn.Module):
     def __init__(self, encoder, decoder, input_len, target_len):
         super().__init__()
@@ -205,9 +254,10 @@ class EncoderDecoderSelfAttn(nn.Module):
 
 
 if __name__ == "__main__":
-    encself = EncoderSelfAttn(n_heads=3, d_model=2, ff_units=10, n_features=2)
-    decself = DecoderSelfAttn(n_heads=3, d_model=2, ff_units=10, n_features=2)
-    model = EncoderDecoderSelfAttn(encself, decself, input_len=2, target_len=2)
+    encpe = EncoderPe(n_heads=3, d_model=2, ff_units=10, n_features=2)
+    decpe = DecoderPe(n_heads=3, d_model=2, ff_units=10, n_features=2)
+
+    model = EncoderDecoderSelfAttn(encpe, decpe, input_len=2, target_len=2)
     loss = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.01)
 
@@ -231,6 +281,7 @@ if __name__ == "__main__":
     train_loader = DataLoader(train_data, batch_size=16, shuffle=True, generator=generator)
     test_loader = DataLoader(test_data, batch_size=16)
 
-    sbs_seq_selfattn = StepByStep(model, loss, optimizer)
-    sbs_seq_selfattn.set_loaders(train_loader, test_loader)
-    sbs_seq_selfattn.train(100)
+    sbs_seq_selfattnpe = StepByStep(model, loss, optimizer)
+    sbs_seq_selfattnpe.set_loaders(train_loader, test_loader)
+    sbs_seq_selfattnpe.train(100)
+

@@ -229,6 +229,9 @@ class Attention(nn.Module):
             scores.append(post_softmax)
 
         alphas = torch.stack(scores)
+        # so the alpha for each batch is tensor([[[0.4750, 0.5250]]], grad_fn=<StackBackward0>)
+        # remember, we are still feeding point by point into the decoder RNN, so the alpha is for 1 point only
+
         self.alphas = alphas.detach()
 
         contexts = []
@@ -380,8 +383,8 @@ if __name__ == "__main__":
     test_data = TensorDataset(source_test, target_test)
 
     generator = torch.Generator()
-    train_loader = DataLoader(train_data, batch_size=16, shuffle=True, generator=generator)
-    test_loader = DataLoader(test_data, batch_size=16)
+    train_loader = DataLoader(train_data, batch_size=1, shuffle=True, generator=generator)
+    test_loader = DataLoader(test_data, batch_size=1)
 
     sbs_seq = StepByStep(model, loss, optimizer)
     sbs_seq.set_loaders(train_loader, test_loader)

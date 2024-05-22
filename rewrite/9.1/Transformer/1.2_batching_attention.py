@@ -124,134 +124,53 @@ class Attention(nn.Module):
                                                                 [0.4265, -0.3488]]))
             self.linear_value.bias = nn.Parameter(torch.tensor([-0.3975, -0.1983]))
 
-
     def init_keys(self, keys):
-        """These are the hidden outputs of the encoder. AKA the K part in the
-        diagram (which will be used to compute a similarity score that gets
-        multiplied to each hidden output from the encoder)
+        """Given the hidden states from the encoder for all x0, x1, compute the keys
+        and store it so that for different queries we can just reuse them
 
-        Also note that a linear layer is applied to keys because keys are not
-        guaranteed to have the same dimension as the hidden output from the decoder's
-        RNN.
+        when batch=3
+        keys tensor([[[-0.5061,  0.1872],
+                     [-0.3318,  0.7027]],
+
+                    [[-0.4729,  0.2452],
+                    [-0.3328,  0.6934]],
+
+                    [[-0.1814,  0.5600],
+                    [-0.5750,  0.3777]]], grad_fn=<TransposeBackward1>)
         """
-        # Keys has shape (batch=16, each row has 2 points, each point has 2 features)
-        self.keys = keys            # Tensor, not list
-        self.values = self.keys
+        # You want each key to be mapped to self.linear_key
+        # somethiing along the lines of: self.keys = torch.matmul(keys, self.linear_key.weights) + self.linear_key.bias
+        self.keys = keys
+        self.proj_keys = self.linear_key(keys)
 
-        self.proj_keys = []
-        for row in self.keys:
-            point0, point1 = row
-
-            proj_p0 = self.linear_key(point0)           # shape = (2)
-            proj_p1 = self.linear_key(point1)
-
-            proj_row = torch.stack([proj_p0, proj_p1])  # shape (2, 2)
-            self.proj_keys.append(proj_row)
-
-        self.proj_keys = torch.stack(self.proj_keys)    # shape (16, 2, 2)
-
-    def similarity_score_for_1query_1key(self, query, proj_key):
-        """
-        query = [[a, b]] (1, 2)
-        proj_key = [[c, d]] (1, 2)
-        returns shape of (1)
-        """
-        # print(f'being fed into similarity_score: {query} {proj_key}')
-        # (1, 2) -> self.linear_query -> (1, 2)
-
-        proj_query = self.linear_query(query)
-        dot_product = proj_query @ proj_key
-        ret = dot_product / np.sqrt(self.d_k)
-        return ret
-
-    def similarity_score_for_query_batched(self, query_batched):
-        # query_batched is (16, 1, 2)
-        # self.proj_keys is (16, 2, 2)
-
-        self.proj_query = self.linear_query(query_batched)
-
-        """
-        proj_query = [                  # 16, 1, H
-            [[q00, q01]],
-            [[q10, q11]],
-            ... (16 times)
-        ]
-
-        proj_keys = [       `           # 16, 2, H
-            [[k00, k01], [k10, k11]],
-            ... (16 times)
-        ]
-
-        dot_product = [                 # 16, 1, H
-            [[q00 * k00 + q01 * k01, q00 * k10 + q01 * k11]],
-            ...
-        ]
-        """
-        # N, 1, H x N, H, 2 -> N, 1, 2
-
-l
-pass
-
+        # we are not doing anything to the values
+        self.values = keys
 
     def forward(self, query_batched, mask=None):
-        """
-        query_batched is (batch=16, 1 row, 2 dim)
+        # Implement softmax (QKT)/sqrt(dk)
 
-        Usage:
-        1> query = batch_first_output[:, -1:]
-        2> context = self.attn(query, mask=mask)
-        3> concatenated = torch.cat([context, query], axis=-1)
+        # To fix this issue, you should specify the dimensions along which you want
+        # to transpose self.proj_keys. In the context of computing the dot product
+        # between query, key, and value matrices in the attention mechanism, you
+        # typically want to transpose the keys along the last two dimensions. So, you
+        # can modify that line in your forward method to transpose self.proj_keys
+        # along dimensions 1 and 2.
+        qkt = torch.bmm(self.linear_query(query_batched), self.proj_keys.transpose(1, 2))
+        pre_softmax = qkt / np.sqrt(self.d_k)
 
-        1. takes the last point of the output from our RNN after each iteration
-        2. generate context window
-        3. which will be concatenated
+        # In PyTorch, when applying operations like softmax along a particular dimension of a tensor, the dim parameter specifies the dimension along which the operation is performed. In this case, dim=-1 indicates that the softmax operation is applied along the last dimension of the pre_softmax tensor.
+        # Here's a breakdown of why dim=-1 might be used in this context:
 
-        This "score" is how similar the hidden output from the decoder's RNN
-        is compared to each hidden output of the encoder's RNN
+        # The pre_softmax tensor likely has shape [batch_size, num_queries, num_keys].
+        # Applying softmax along the last dimension (dim=-1) means that softmax will
+        # be computed for each row of the tensor independently. This operation
+        # ensures that the values in each row sum up to 1, representing a probability
+        # distribution over the keys for each query.
+        self.alphas = F.softmax(pre_softmax, dim=-1)
 
-        In each batch:
-            1. we get 1 hidden state of 2 features
-            2. this hidden state multiplies with wT_h to get proj_Q
-            3. the proj_q is fed into the scoring function with the proj_key to get similarity scores
-            4. the similarities scores ....
-        """
+        return torch.bmm(self.alphas, self.values)
 
-        scores = []
 
-        # query_batched is of shape (batch_size=16, 1 point/row, 2 features)
-        for batch_idx, query_row in enumerate(query_batched):
-            # query_row is of shape (1, 2)
-            scores_for_points = []
-            for pt_idx, k in enumerate(self.proj_keys[batch_idx]):
-                scores_for_points.append(
-                    self.similarity_score_for_1query_1key(query_row, self.proj_keys[batch_idx][pt_idx]))
-
-            pre_softmax = torch.stack(scores_for_points, dim=1)
-            post_softmax = F.softmax(pre_softmax, dim=1)
-            scores.append(post_softmax)
-
-        alphas = torch.stack(scores)
-        self.alphas = alphas.detach()
-
-        contexts = []
-        for batch_idx, alpha_row in enumerate(alphas):
-            # print(alpha_row)  -> tensor([[0.4750, 0.5250]], grad_fn=<UnbindBackward0>)
-            # print(self.values[batch_idx]) -> tensor([[-0.5061,  0.1872], [-0.3318,  0.7027]])
-
-            alignments = []
-            for pt_idx, score_tensor in enumerate(alpha_row.squeeze()):
-                # print(f'score for this point={score_tensor}')
-                # print(f'value of this point={self.values[batch_idx][pt_idx]}')
-                # print(f'gets {score_tensor[pt_idx] * self.values[batch_idx][pt_idx]}')
-                a0a1 = score_tensor * self.values[batch_idx][pt_idx]
-                # print(f'output for this point={a0a1}')
-                alignments.append(a0a1)
-
-            tensor_w_2alignment = torch.stack(alignments)
-            contexts.append(torch.sum(tensor_w_2alignment, dim=0))
-
-        # Just matching with the output from the 0_copy
-        return torch.stack(contexts).unsqueeze(1)
 
 
 ### End of implementation here
@@ -382,8 +301,8 @@ if __name__ == "__main__":
     test_data = TensorDataset(source_test, target_test)
 
     generator = torch.Generator()
-    train_loader = DataLoader(train_data, batch_size=16, shuffle=True, generator=generator)
-    test_loader = DataLoader(test_data, batch_size=16)
+    train_loader = DataLoader(train_data, batch_size=1, shuffle=True, generator=generator)
+    test_loader = DataLoader(test_data, batch_size=1)
 
     sbs_seq = StepByStep(model, loss, optimizer)
     sbs_seq.set_loaders(train_loader, test_loader)
