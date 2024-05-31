@@ -133,16 +133,19 @@ if __name__ == "__main__":
         data = pickle.load(inf)
 
     points, directions = data['points'], data['directions']
-    full_train = torch.as_tensor(points).float()
-    target_train = full_train[:, 2:]
+    training_full_seq = torch.as_tensor(points).float()
+    training_source_seq = training_full_seq[:, :2]
+    training_target_seq = training_full_seq[:, 2:]
 
     test_points, test_directions = data['test_points'], data['test_directions']
-    full_test = torch.as_tensor(test_points).float()
-    source_test = full_test[:, :2]
-    target_test = full_test[:, 2:]
+    testing_full_seq = torch.as_tensor(test_points).float()
+    testing_source_seq = testing_full_seq[:, :2]
+    testing_target_seq = testing_full_seq[:, 2:]
 
-    train_data = TensorDataset(full_train, target_train)
-    test_data = TensorDataset(source_test, target_test)
+    # we are not using teacher probability
+    # train_data = TensorDataset(training_full_seq, training_target_seq)
+    train_data = TensorDataset(training_source_seq, training_target_seq)
+    test_data = TensorDataset(testing_source_seq, testing_target_seq)
 
     generator = torch.Generator()
     train_loader = DataLoader(train_data, batch_size=16, shuffle=True, generator=generator)

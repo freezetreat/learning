@@ -119,7 +119,10 @@ class EncoderSelfAttn(nn.Module):
 
     def forward(self, query, mask=None):
         self.self_attn.init_keys(query)
+
+        # att has the same shape as query. See notion notes about this
         att = self.self_attn(query, mask)
+
         out = self.ffn(att)
         return out
 
@@ -216,6 +219,7 @@ class EncoderDecoderSelfAttn(nn.Module):
         # print(source_mask)        => None
         # print(target_mask)        => tensor([[[ True, False],
         #                                       [ True,  True]]])
+        print('Inside decoder', shifted_target_seq, source_mask, target_mask)
         outputs = self.decoder(shifted_target_seq,
                                source_mask=source_mask,
                                target_mask=target_mask)
@@ -301,6 +305,8 @@ class EncoderDecoderSelfAttn(nn.Module):
             shifted tensor([[[ 0.8055, -0.9169],
                              [-0.8251, -0.9499]]])
             """
+            print(X)
+
             shifted_target_seq = X[:, self.input_len-1:-1, :]
 
             # Decodes using the trg_mask to prevent cheating
@@ -308,7 +314,7 @@ class EncoderDecoderSelfAttn(nn.Module):
             # outputs tensor([[[-0.1157, -0.0468],
             #                  [-0.1157, -0.0468]]], grad_fn=<ViewBackward0>)
             # well they are same because they are uninitiailized
-
+            exit()
         else:
             # WITHOUT teacher forcing
 

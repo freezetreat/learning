@@ -173,6 +173,7 @@ class StepByStep(object):
         self.set_seed(seed)
 
         for epoch in range(n_epochs):
+            print('EPOCH:', epoch)
             # Keeps track of the numbers of epochs
             # by updating the corresponding attribute
             self.total_epochs += 1
