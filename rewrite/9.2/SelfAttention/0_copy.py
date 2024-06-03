@@ -205,8 +205,8 @@ class EncoderDecoderSelfAttn(nn.Module):
 
 
 if __name__ == "__main__":
-    encself = EncoderSelfAttn(n_heads=3, d_model=2, ff_units=10, n_features=2)
-    decself = DecoderSelfAttn(n_heads=3, d_model=2, ff_units=10, n_features=2)
+    encself = EncoderSelfAttn(n_heads=1, d_model=2, ff_units=10, n_features=2)
+    decself = DecoderSelfAttn(n_heads=1, d_model=2, ff_units=10, n_features=2)
     model = EncoderDecoderSelfAttn(encself, decself, input_len=2, target_len=2)
     loss = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.01)
@@ -233,4 +233,4 @@ if __name__ == "__main__":
 
     sbs_seq_selfattn = StepByStep(model, loss, optimizer)
     sbs_seq_selfattn.set_loaders(train_loader, test_loader)
-    sbs_seq_selfattn.train(100)
+    sbs_seq_selfattn.train(20)

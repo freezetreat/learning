@@ -156,6 +156,8 @@ class EncoderDecoder(nn.Module):
 class EncoderDecoderAttn(EncoderDecoder):
     def __init__(self, encoder, decoder, input_len, target_len, teacher_forcing_prob=0.5):
         super().__init__(encoder, decoder, input_len, target_len, teacher_forcing_prob)
+
+        # Note that we want this alpha for data analysis later. We do not need this
         self.alphas = None
 
     def init_outputs(self, batch_size):

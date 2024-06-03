@@ -1,6 +1,3 @@
-# changing this to single attention to make things more legible.
-# Note that performance decreased slightly
-
 import copy
 import numpy as np
 
@@ -71,9 +68,8 @@ class Attention(nn.Module):
 
 
 class EncoderSelfAttn(nn.Module):
-    def __init__(self, n_heads, d_model, ff_units, n_features=None):
+    def __init__(self, d_model, ff_units, n_features=None):
         super().__init__()
-        self.n_heads = n_heads
         self.d_model = d_model
         self.ff_units = ff_units
         self.n_features = n_features
@@ -92,14 +88,13 @@ class EncoderSelfAttn(nn.Module):
 
 
 class DecoderSelfAttn(nn.Module):
-    def __init__(self, n_heads, d_model, ff_units, n_features=None):
+    def __init__(self, d_model, ff_units, n_features=None):
         super().__init__()
-        self.n_heads = n_heads
         self.d_model = d_model
         self.ff_units = ff_units
         self.n_features = d_model if n_features is None else n_features
-        self.self_attn_heads = Attention(d_model, input_dim=self.n_features)
-        self.cross_attn_heads = Attention(d_model)
+        self.self_attn = Attention(d_model, input_dim=self.n_features)
+        self.cross_attn = Attention(d_model)
         self.ffn = nn.Sequential(
             nn.Linear(d_model, ff_units),
             nn.ReLU(),
@@ -107,12 +102,12 @@ class DecoderSelfAttn(nn.Module):
         )
 
     def init_keys(self, states):
-        self.cross_attn_heads.init_keys(states)
+        self.cross_attn.init_keys(states)
 
     def forward(self, query, source_mask=None, target_mask=None):
-        self.self_attn_heads.init_keys(query)
-        att1 = self.self_attn_heads(query, target_mask)
-        att2 = self.cross_attn_heads(att1, source_mask)
+        self.self_attn.init_keys(query)
+        att1 = self.self_attn(query, target_mask)
+        att2 = self.cross_attn(att1, source_mask)
         out = self.ffn(att2)
         return out
 
@@ -177,8 +172,8 @@ class EncoderDecoderSelfAttn(nn.Module):
 
 
 if __name__ == "__main__":
-    encself = EncoderSelfAttn(n_heads=3, d_model=2, ff_units=10, n_features=2)
-    decself = DecoderSelfAttn(n_heads=3, d_model=2, ff_units=10, n_features=2)
+    encself = EncoderSelfAttn(d_model=2, ff_units=10, n_features=2)
+    decself = DecoderSelfAttn(d_model=2, ff_units=10, n_features=2)
     model = EncoderDecoderSelfAttn(encself, decself, input_len=2, target_len=2)
     loss = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=0.01)
@@ -200,8 +195,8 @@ if __name__ == "__main__":
     test_data = TensorDataset(source_test, target_test)
 
     generator = torch.Generator()
-    train_loader = DataLoader(train_data, batch_size=16, shuffle=True, generator=generator)
-    test_loader = DataLoader(test_data, batch_size=16)
+    train_loader = DataLoader(train_data, batch_size=1, shuffle=True, generator=generator)
+    test_loader = DataLoader(test_data, batch_size=1)
 
     sbs_seq_selfattn = StepByStep(model, loss, optimizer)
     sbs_seq_selfattn.set_loaders(train_loader, test_loader)
