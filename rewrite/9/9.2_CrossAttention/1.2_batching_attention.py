@@ -306,6 +306,6 @@ if __name__ == "__main__":
 
     sbs_seq = StepByStep(model, loss, optimizer)
     sbs_seq.set_loaders(train_loader, test_loader)
-    sbs_seq.train(20)
+    sbs_seq.train(100)
 
 
