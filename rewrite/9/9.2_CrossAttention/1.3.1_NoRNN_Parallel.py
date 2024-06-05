@@ -95,6 +95,7 @@ class DecoderAttn(nn.Module):
         self.attention.init(encoder_states)
 
     def forward(self, X, target_mask=None):
+
         context = self.attention(X, target_mask)
         # No more concatenating, directly feed context to linear
         out = self.linear(context)
@@ -117,14 +118,29 @@ class EncoderDecoderAttn(nn.Module):
         encoder_states, last_hidden = self.encoder(source_seq)
         self.decoder.init(encoder_states)
 
-        # points: [0, 1, 2, 3], shifted: [1, 2]
-        shifted_target_seq = X[:, 1:3, :]
-
         target_mask = torch.tensor([
             [True, False],          # first row can't peak
             [True, True]            # second row is ok
         ])
-        return self.decoder(shifted_target_seq, target_mask=target_mask)
+
+        if self.training:
+            # points: [0, 1, 2, 3], shifted: [1, 2]
+            shifted_target_seq = X[:, 1:3, :]
+
+            return self.decoder(shifted_target_seq, target_mask=target_mask)
+        else:
+            # generates a sequence one point at a time
+            inputs = source_seq[:, -1:]     # last point from source seq
+            outputs = []
+
+            for i in range(2):
+                out = self.decoder(inputs, target_mask)      # Fix the target_mask indexing
+                outputs.append(out[:, -1:, :])
+                inputs = torch.cat([inputs, out[:, -1:, :]], dim=1)
+
+            outputs = torch.cat(outputs, dim=1)
+            return outputs
+
 
 
 if __name__ == "__main__":
