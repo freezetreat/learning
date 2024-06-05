@@ -216,15 +216,15 @@ if __name__ == "__main__":
         data = pickle.load(inf)
 
     points, directions = data['points'], data['directions']
-    source_train = torch.as_tensor(points).double()
-    target_train = source_train[:, 2:]
+    full_train = torch.as_tensor(points).double()
+    target_train = full_train[:, 2:]
 
     test_points, test_directions = data['test_points'], data['test_directions']
-    source_test = torch.as_tensor(test_points).double()
-    source_test = source_test[:, :2]
-    target_test = source_test[:, 2:]
+    full_test = torch.as_tensor(test_points).double()
+    source_test = full_test[:, :2]
+    target_test = full_test[:, 2:]
 
-    train_data = TensorDataset(source_train, target_train)
+    train_data = TensorDataset(full_train, target_train)
     test_data = TensorDataset(source_test, target_test)
 
     generator = torch.Generator()
@@ -233,4 +233,4 @@ if __name__ == "__main__":
 
     sbs_seq_selfattn = StepByStep(model, loss, optimizer)
     sbs_seq_selfattn.set_loaders(train_loader, test_loader)
-    sbs_seq_selfattn.train(20)
+    sbs_seq_selfattn.train(100)

@@ -14,7 +14,6 @@ from torch.utils.data import DataLoader, Dataset, random_split, TensorDataset
 from StepByStep import StepByStep
 
 
-
 class Encoder(nn.Module):
     def __init__(self, n_features=0, hidden_dim=0):
         super().__init__()
@@ -97,13 +96,9 @@ class DecoderAttn(nn.Module):
 
     def forward(self, X, target_mask=None):
         context = self.attention(X, target_mask)
-
         # No more concatenating, directly feed context to linear
-        # print('Context', context)
         out = self.linear(context)
-        # print(out.view(-1, 1, self.n_features))
-
-        return out.view(-1, 1, self.n_features)
+        return out
 
 
 class EncoderDecoderAttn(nn.Module):
@@ -159,7 +154,7 @@ if __name__ == "__main__":
     train_data = TensorDataset(source_train, target_train)
     test_data = TensorDataset(source_test, target_test)
 
-    batch_size = 1
+    batch_size = 16
 
     generator = torch.Generator()
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, generator=generator)
