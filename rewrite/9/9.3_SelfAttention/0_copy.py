@@ -216,15 +216,15 @@ if __name__ == "__main__":
         data = pickle.load(inf)
 
     points, directions = data['points'], data['directions']
-    full_train = torch.as_tensor(points).double()
-    target_train = full_train[:, 2:]
+    source_train = torch.as_tensor(points).double()
+    target_train = source_train[:, 2:]
 
     test_points, test_directions = data['test_points'], data['test_directions']
-    full_test = torch.as_tensor(test_points).double()
-    source_test = full_test[:, :2]
-    target_test = full_test[:, 2:]
+    source_test = torch.as_tensor(test_points).double()
+    source_test = source_test[:, :2]
+    target_test = source_test[:, 2:]
 
-    train_data = TensorDataset(full_train, target_train)
+    train_data = TensorDataset(source_train, target_train)
     test_data = TensorDataset(source_test, target_test)
 
     generator = torch.Generator()
