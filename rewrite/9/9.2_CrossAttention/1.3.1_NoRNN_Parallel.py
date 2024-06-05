@@ -21,14 +21,6 @@ class Encoder(nn.Module):
         self.n_features = n_features
         self.rnn = nn.RNN(self.n_features, self.hidden_dim, dtype=torch.float64, batch_first=True)
 
-        with torch.no_grad():
-            self.rnn.weight_ih_l0 = nn.Parameter(torch.tensor([[-0.1046, -0.1705],
-                                                               [0.2285, -0.2168]]))
-            self.rnn.weight_hh_l0 = nn.Parameter(torch.tensor([[0.2841, -0.1657],
-                                                               [-0.2813, 0.3142]]))
-            self.rnn.bias_ih_l0 = nn.Parameter(torch.tensor([0.3835, 0.1879]))
-            self.rnn.bias_hh_l0 = nn.Parameter(torch.tensor([-0.6391, -0.0030]))
-
     def forward(self, query):
         output, hidden = self.rnn(query)
         return output, hidden
@@ -46,17 +38,6 @@ class Attention(nn.Module):
 
         self.K = None
         self.V = None
-
-        with torch.no_grad():
-            self.linear_query.weight = nn.Parameter(torch.tensor([[0.0798, 0.4151],
-                                                                 [-0.0994, 0.1561]]))
-            self.linear_query.bias = nn.Parameter(torch.tensor([-0.2548, 0.3911]))
-            self.linear_key.weight = nn.Parameter(torch.tensor([[-0.3068, -0.4800],
-                                                                [-0.4578, -0.1488]]))
-            self.linear_key.bias = nn.Parameter(torch.tensor([0.3407, 0.4099]))
-            self.linear_value.weight = nn.Parameter(torch.tensor([[-0.2710, -0.6198],
-                                                                 [0.4265, -0.3488]]))
-            self.linear_value.bias = nn.Parameter(torch.tensor([-0.3975, -0.1983]))
 
     def init(self, encoder_states):
         # Note that encoder_states is now all the states of the encoder
@@ -84,29 +65,28 @@ class DecoderAttn(nn.Module):
         self.n_features = n_features
         self.hidden_dim = hidden_dim
         self.attention = Attention(n_features=n_features, hidden_dim=hidden_dim)
-        self.linear = nn.Linear(self.n_features, self.n_features, dtype=torch.float64)
-
-        with torch.no_grad():
-            self.linear.weight = nn.Parameter(torch.tensor([[-0.3285, -0.3166],
-                                                            [-0.1001, 0.0352]]))
-            self.linear.bias = nn.Parameter(torch.tensor([-0.0187, 0.2951]))
+        self.ffn = nn.Sequential(
+            nn.Linear(2, 64),
+            nn.ReLU(),
+            nn.Linear(64, self.n_features),
+        )
 
     def init(self, encoder_states):
         self.attention.init(encoder_states)
 
     def forward(self, X, target_mask=None):
-
         context = self.attention(X, target_mask)
         # No more concatenating, directly feed context to linear
-        out = self.linear(context)
+        out = self.ffn(context)
         return out
 
 
 class EncoderDecoderAttn(nn.Module):
-    def __init__(self, encoder, decoder):
+    def __init__(self, encoder, decoder, n_features=2):
         super().__init__()
         self.encoder = encoder
         self.decoder = decoder
+        self.n_features = n_features
 
     def forward(self, X):
         """
@@ -131,14 +111,13 @@ class EncoderDecoderAttn(nn.Module):
         else:
             # generates a sequence one point at a time
             inputs = source_seq[:, -1:]     # last point from source seq
-            outputs = []
+            outputs = torch.zeros(batch_size, 2, self.n_features, dtype=torch.float64)
 
             for i in range(2):
                 out = self.decoder(inputs, target_mask)      # Fix the target_mask indexing
-                outputs.append(out[:, -1:, :])
+                outputs[:, i:i+1, :] = out[:, -1:, :]
                 inputs = torch.cat([inputs, out[:, -1:, :]], dim=1)
 
-            outputs = torch.cat(outputs, dim=1)
             return outputs
 
 
