@@ -54,7 +54,8 @@ class Attention(nn.Module):
         Q = self.linear_query(query)
         res = torch.matmul(Q, self.K.transpose(-2, -1))
         res = res / torch.sqrt(torch.tensor(self.hidden_dim, dtype=torch.float64))
-        res = res.masked_fill(~target_mask, float('-inf'))
+        if target_mask is not None:
+            res = res.masked_fill(~target_mask, float('-inf'))
         res = F.softmax(res, dim=-1)
         return torch.matmul(res, self.V)
 
@@ -114,7 +115,7 @@ class EncoderDecoderAttn(nn.Module):
             outputs = torch.zeros(batch_size, 2, self.n_features, dtype=torch.float64)
 
             for i in range(2):
-                out = self.decoder(inputs, target_mask)      # Fix the target_mask indexing
+                out = self.decoder(inputs)
                 outputs[:, i:i+1, :] = out[:, -1:, :]
                 inputs = torch.cat([inputs, out[:, -1:, :]], dim=1)
 
