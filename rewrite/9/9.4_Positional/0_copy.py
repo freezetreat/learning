@@ -254,8 +254,8 @@ class EncoderDecoderSelfAttn(nn.Module):
 
 
 if __name__ == "__main__":
-    encpe = EncoderPe(n_heads=3, d_model=2, ff_units=10, n_features=2)
-    decpe = DecoderPe(n_heads=3, d_model=2, ff_units=10, n_features=2)
+    encpe = EncoderPe(n_heads=3, d_model=2, ff_units=64, n_features=2)
+    decpe = DecoderPe(n_heads=3, d_model=2, ff_units=64, n_features=2)
 
     model = EncoderDecoderSelfAttn(encpe, decpe, input_len=2, target_len=2)
     loss = nn.MSELoss()
