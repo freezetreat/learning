@@ -171,7 +171,8 @@ class StepByStep(object):
             with torch.no_grad():
                 # Performs evaluation using mini-batches
                 val_loss = self._mini_batch(validation=True)
-                print(epoch, val_loss)
+                if epoch % 10 == 0:
+                    print(epoch, val_loss)
                 self.val_losses.append(val_loss)
 
     def predict(self, x):
